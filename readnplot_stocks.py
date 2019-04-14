@@ -1,4 +1,4 @@
-
+#Just fortesting purposes, not an important script for the program
 #Read you data from you SQL database.
 
 import pandas as pd
@@ -21,8 +21,6 @@ engine = sqlalchemy.create_engine("mysql+pymysql://root:"+serverpass+"@localhost
 
 sampleData = pd.read_sql(query, engine)
 
-#SMA200 needs 200 values to count the SMA, so the first 200 would ne null for us int the dataframe.
-#Avoiding this for now by just deleting the first 200 values. Will do this for every timeframe.
 
 sampleData["timestamp"] = pd.to_datetime(sampleData["timestamp"])
 
