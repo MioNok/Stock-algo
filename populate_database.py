@@ -12,7 +12,7 @@ import time
 #Later version will use a cloud provider like AWS.
 
 #Edit these
-apikey = ["insertApikey"] # Insert Alphavantage apikey.
+apikey = [] # Insert Alphavantage apikey.
 serverpass = "defaultpass" #insert your mysql serverpassword
 serveruser = "root" #insert your mysql serverpassword
 database = "stockdata" #database in your mysql you want to use. Need to be setup before running (Create DATABASE DatabaseName)
@@ -85,11 +85,11 @@ def read_data_daily(tickers = dowTickers, outputsize = "full", saveLatestOnly = 
 
     
 #Depending on if you are fetcing the data all at once or not appending or replaing the data might be the right option.
-def write_data_to_sql(dailyStockData, table_name, if_exists = "replace"):
+def write_data_to_sql(df, table_name, if_exists = "replace"):
     #you need mysql alchemy and pymysql to run this. syntax is:  Username:password@host:port/database
     engine = sqlalchemy.create_engine(serverSite)
     #Writing the data, name is table name. 
-    dailyStockData.to_sql(name = table_name, con = engine,index = False,  if_exists = if_exists)
+    df.to_sql(name = table_name, con = engine,index = False,  if_exists = if_exists)
 
 def read_snp_tickers():
     query = """SELECT Symbol  
@@ -101,6 +101,14 @@ def read_snp_tickers():
     return tickers
 
 
+def read_from_database(query):    
+    #Creating the sqlalchemy engine and read sample data.
+    engine = sqlalchemy.create_engine(serverSite)
+    fetchedData = pd.read_sql(query, engine)    
+    return fetchedData
+    
+    
+    
 #If you have multiple keys this function cycles trough them. Dont be like me.
 def keyCounter():
     global key_counter 
@@ -113,10 +121,11 @@ def main():
 
     fiscStockData = getSnP500data() 
     write_data_to_sql(fiscStockData, "fiscdata", if_exists = "replace")    
-    snpTickers = read_snp_tickers()
+    snpTickers = read_from_database("""SELECT Symbol  
+                                  FROM fiscdata;""")
     
     #Do not currently want to wait it to fetch all 500 stocks so subsetting the amout for now.
-    stockdata = read_data_daily(snpTickers["Symbol"][0:2].tolist())   
+    stockdata = read_data_daily(snpTickers["Symbol"].tolist())   
     write_data_to_sql(stockdata, "dailydata")
 
 
