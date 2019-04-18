@@ -12,21 +12,21 @@ import time
 #Later version will use a cloud provider like AWS.
 
 #Edit these
-apikey = [] # Insert Alphavantage apikey.
+apikey = [""] # Insert Alphavantage apikey.
 serverpass = "defaultpass" #insert your mysql serverpassword
 serveruser = "root" #insert your mysql serverpassword
 database = "stockdata" #database in your mysql you want to use. Need to be setup before running (Create DATABASE DatabaseName)
 serverSite = "mysql+pymysql://"+serveruser+":"+serverpass+"@localhost:3306/"+database
 
 #How long to sleep between search cycles
-sleeptime = 5
+sleeptime = 8
 
 key_counter = 0
 
 def getSnP500data():
-    snp500data = pd.read_csv("https://datahub.io/core/s-and-p-500-companies-financials/r/constituents-financials.csv")
+    snp500data = pd.read_csv("https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv")
     print("S&P500 data fetched")
-    return snp500data.drop(["SEC Filings"], axis =1)
+    return snp500data
     
 
 #Legacy, but if needed the dow tickers are still here.
@@ -42,6 +42,7 @@ def read_data_daily(tickers = dowTickers, outputsize = "full", saveLatestOnly = 
     for ticker in tickers:
         retry = True
         retry_counter = 0
+        fetch_counter = 0
         
         while retry:
             tempRawStockDataDaily = pd.read_csv("https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED"+
@@ -59,12 +60,19 @@ def read_data_daily(tickers = dowTickers, outputsize = "full", saveLatestOnly = 
                 
                 #Saving the reults for this ticker and moving on to the following ticker.
                 if saveLatestOnly:
-                    rawStockDataDaily = rawStockDataDaily.append(tempRawStockDataDaily.iloc[0:])
+                    rawStockDataDaily.append(tempRawStockDataDaily.iloc[0:])
                 else:
-                    rawStockDataDaily = rawStockDataDaily.append(tempRawStockDataDaily)
+                    rawStockDataDaily.append(tempRawStockDataDaily)
                 
                 #Free API key only gets you so far, as of writing this alphavantage is limiting the amount of API calls you can make in a minute..
-                time.sleep(sleeptime)
+                time.sleep(sleeptime-1)
+                fetch_counter += 1
+                
+                if (fetch_counter >= 20):
+                    write_data_to_sql(rawStockDataDaily, "dailydata")
+                    print("Wrote the collected data to SQL")
+                    fetch_counter = 0
+                    
                 retry = False
                 
             else: 
@@ -125,7 +133,7 @@ def main():
                                   FROM fiscdata;""")
     
     #Do not currently want to wait it to fetch all 500 stocks so subsetting the amout for now.
-    stockdata = read_data_daily(snpTickers["Symbol"].tolist())   
+    stockdata = read_data_daily(snpTickers["Symbol"].tolist(), outputsize = "compact")   
     write_data_to_sql(stockdata, "dailydata")
 
 

@@ -40,6 +40,7 @@ class Trade:
         self.posSize = posSize
         self.orderSide = orderSide
         self.timeStamp = timeStamp
+        self.stopPrice = 0
         self.orderID = 0
         self.entryPrice = 0
         self.costBasis = 0
@@ -63,6 +64,9 @@ class Trade:
         
     def cancelOrder(orderID):
         api.cancel_orderorder(orderID)
+        
+    def setStopPrice(self,stopPrice):
+        self.stopPrice = stopPrice
         
     def flattenOrder(self):
         flattenSide = ""
@@ -181,29 +185,46 @@ def get_watchlist_price(watchlist_df):
 
 #Define number of shares here
 def fire_orders_ema_cross(trades, side, now, time_period, ema_time_period):
-    #stop_prices = []
-    #Find stop prices for the trades.
-    #for trade in trades:
-    #    data = read_from_database("Select timestamp, ticker, high, low, close from dailydata where ticker ='"+ trade+"' ORDER BY timestamp DESC limit "+str(ema_time_period+100)+";")
-            
-        #Talib need the oldest data to be first     
-    #    data = data.iloc[::-1]
-        
-        #Setting the stop price to the 20EMA
-   #     data["stop_price"] = talib.EMA(data.close, timeperiod = ema_time_period)
-   #     stop_prices.append(data.stop_price[0])
     
     
+    succesful_trades = []
     for trade in trades:
         try:
-            new_trade = Trade(trade, 20, side, now)
-            new_trade.submitOrder()
+            live_trade = Trade(trade, 20, side, now)
+            live_trade.submitOrder()
+            succesful_trades.append(live_trade)
         except:
             print("Trade failed for ",trade)
+    return succesful_trades
+
+
+def check_stoploss(current_trades,ema_time_period):
+    #Note to self. Search all data at once, not every stock for themself.
+    #Find stop prices for the trades.
+    for trade in current_trades:
+        if (trade.stopPrice == 0) :
+            data = read_from_database("Select timestamp, ticker, high, low, close from dailydata where ticker ='"+ trade.ticker+ "' ORDER BY timestamp DESC limit "+str(ema_time_period+10)+";")
+            
+            #Talib need the oldest data to be first     
+            data = data.iloc[::-1]
+        
+            #Setting the stop price to the 20EMA
+            data["stop_price"] = talib.EMA(data.close, timeperiod = ema_time_period)
+            trade.setStopPrice(data.stop_price[0])
+            print("Stop price for ", trade.ticker," is set to ", trade.stopPrice)
+        else:
+            #Get the close price of the last 1 minute candle and comapre it against the stop price
+            current_trade_price = api.get_barset(trade.ticker,'minute',limit = 1).df.iloc[0,3]
+            if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
+                trade.flattenOrder()
+            if (current_trade_price < trade.stopPrice and trade.orderSide == "buy"):
+                trade.flattenOrder()
+
     
     
 def main():
     ema_time_period = 20
+    active_trades = []
     
     while True: 
         
@@ -216,19 +237,20 @@ def main():
         #if (api.get_clock == False and "9:00" in str(now)):
         col_lables = ["ticker","side","price"]
         watchlist = pd.DataFrame(ma_crossing("EMA", ema_time_period),columns = col_lables).sort_values("ticker")
-        write_data_to_sql(pd.DataFrame(watchlist),"watchlist")
+        write_data_to_sql(pd.DataFrame(watchlist),"watchlist") #Replace is default, meaning yesterdays watchlist gets deleted.
         
         #Trade!
         while api.get_clock().is_open:
             #Loop trough watchlist and check if the value has been crossed. 
-            #Can I fetch all of them together?
             found_trades_long, found_trades_short = get_watchlist_price(watchlist)
-            fire_orders_ema_cross(found_trades_long, "buy", str(now),ema_time_period)
-            fire_orders_ema_cross(found_trades_short, "sell", str(now),ema_time_period)
+            succ_trades_long = fire_orders_ema_cross(found_trades_long, "buy", str(now),ema_time_period)
+            succ_trades_short = fire_orders_ema_cross(found_trades_short, "sell", str(now),ema_time_period)
+            active_trades.append(succ_trades_long + succ_trades_short)
             
-            remove_from_watchlist = found_trades_long + found_trades_short
+            traded_stocks = found_trades_long + found_trades_short
             
-            watchlist = watchlist[~watchlist.ticker.str.contains('|'.join(remove_from_watchlist))]
+            watchlist = watchlist[~watchlist.ticker.str.contains('|'.join(traded_stocks))]
+            check_stoploss(active_trades, ema_time_period)
             
             
             
@@ -241,5 +263,5 @@ def main():
     
 
 if __name__ == "__main__":
-    main()   
+    main()
 
