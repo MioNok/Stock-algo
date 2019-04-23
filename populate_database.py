@@ -6,22 +6,24 @@
 import pandas as pd
 import sqlalchemy
 import time
+import alpaca_trade_api as tradeapi
 
 
 #This works when assuming host is localhost.
 #Later version will use a cloud provider like AWS.
 
 #Edit these
-apikey = [""] # Insert Alphavantage apikey.
 serverpass = "defaultpass" #insert your mysql serverpassword
 serveruser = "root" #insert your mysql serverpassword
 database = "stockdata" #database in your mysql you want to use. Need to be setup before running (Create DATABASE DatabaseName)
 serverSite = "mysql+pymysql://"+serveruser+":"+serverpass+"@localhost:3306/"+database
 
-#How long to sleep between search cycles
-sleeptime = 8
-
-key_counter = 0
+#Alpaca tradeApi
+api = tradeapi.REST(
+    key_id="",
+    secret_key="",
+    base_url="https://paper-api.alpaca.markets"
+)
 
 def getSnP500data():
     snp500data = pd.read_csv("https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv")
@@ -30,68 +32,51 @@ def getSnP500data():
     
 
 #Legacy, but if needed the dow tickers are still here.
-dowTickers = ["AXP","AAPL","BA","CAT","CSCO","CVX","DIS","DOW","GS",
-              "HD","IBM","INTC","JNJ","JPM","KO","MCD","MMM", "MRK",
-              "MSFT","NKE","PFE","PG","TRV","UNH","UTX","V","VZ","WBA",
-              "WMT","XOM"]
+#dowTickers = ["AXP","AAPL","BA","CAT","CSCO","CVX","DIS","DOW","GS",
+#              "HD","IBM","INTC","JNJ","JPM","KO","MCD","MMM", "MRK",
+#              "MSFT","NKE","PFE","PG","TRV","UNH","UTX","V","VZ","WBA",
+#              "WMT","XOM"]
 
-#Uses the dow tickers if nothing else is specified.
-def read_data_daily(tickers = dowTickers, outputsize = "full", saveLatestOnly = False):
-    rawStockDataDaily = pd.DataFrame()
 
-    for ticker in tickers:
-        retry = True
-        retry_counter = 0
-        fetch_counter = 0
+def read_data_daily_alpaca(tickers, time_period = "day"):
+    current_trade_prices = None
+    index = 0
+    while index <=len(tickers):
+        if current_trade_prices is None:
+            current_trade_prices = api.get_barset(tickers[index:index+100],time_period,limit = 500)
+        else:
+            current_trade_prices.update(api.get_barset(tickers[index:index+100],time_period,limit = 500))
+        index += 100
         
-        while retry:
-            tempRawStockDataDaily = pd.read_csv("https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED"+
-                                                "&symbol="+ ticker +
-                                                "&outputsize="+outputsize+
-                                                "&datatype=csv"+
-                                                "&apikey="+ apikey[key_counter])
-            
-            #Check that the data is correct
-            if tempRawStockDataDaily.shape[1] == 9:
-                 #Write the ticker name to the df to keep track of what data belong where.
-                tempRawStockDataDaily["ticker"] = ticker
-                print("Fetched " + ticker + " daily data" )
-                keyCounter()
-                
-                #Saving the reults for this ticker and moving on to the following ticker.
-                if saveLatestOnly:
-                    rawStockDataDaily.append(tempRawStockDataDaily.iloc[0:])
-                else:
-                    rawStockDataDaily.append(tempRawStockDataDaily)
-                
-                #Free API key only gets you so far, as of writing this alphavantage is limiting the amount of API calls you can make in a minute..
-                time.sleep(sleeptime-1)
-                fetch_counter += 1
-                
-                if (fetch_counter >= 20):
-                    write_data_to_sql(rawStockDataDaily, "dailydata")
-                    print("Wrote the collected data to SQL")
-                    fetch_counter = 0
-                    
-                retry = False
-                
-            else: 
-                #Fetch has failed. Think about what you have done and try again.
-                retry_counter += 1 # counting the retrys, if above 10, stop pining the server, its not happening.
-                print("Retrying to fetch ", ticker)
-                
-                if retry_counter == 5:
-                    print("The fetch has failed 5 times in a row, something is wrong with the server, your api call or your key. Jumping over this one.")
-                    retry = False
-                #Lets try again.    
-                else: 
-                    retry = True
-                time.sleep(sleeptime)
-            
-    return rawStockDataDaily
-
+    price_df = current_trade_prices.df    
 
     
+    print("Found data for", int(price_df.shape[1]/5),"stocks.")
+    
+    #Writing the whole dataframe to the sql server returs a "too many columns error". 
+    #Hence we will split up the dataframe so that all close/open values are under one column etc.
+    index = 0
+    stockdata = pd.DataFrame()
+    while index <= price_df.shape[1]:
+        temp_df = price_df.iloc[:,index:index+5]
+        
+        #Save ticker before changing colnames. have to change colnames in order to append them all together.
+        ticker = list(temp_df)[0][0]
+        temp_df.columns = ["open","high","low","close","volume"]
+        
+        #Get the ticker and the timestamp of the data
+        temp_df["ticker"] = ticker #ticker is hidden in the colname which is a tuple
+        temp_df["timestamp"] = temp_df.index #timestamp is hidden in the index.
+        
+        stockdata = stockdata.append(temp_df, ignore_index = True)
+        index += 5
+        
+        if ticker == tickers.iloc[-1]: 
+            break
+        
+    return stockdata
+    
+
 #Depending on if you are fetcing the data all at once or not appending or replaing the data might be the right option.
 def write_data_to_sql(df, table_name, if_exists = "replace"):
     #you need mysql alchemy and pymysql to run this. syntax is:  Username:password@host:port/database
@@ -117,26 +102,17 @@ def read_from_database(query):
     
     
     
-#If you have multiple keys this function cycles trough them. Dont be like me.
-def keyCounter():
-    global key_counter 
-    key_counter +=1
-    if (key_counter >= len(apikey)): key_counter = 0
-            
-    
 #Main
-def main():
+def db_main():
 
     fiscStockData = getSnP500data() 
     write_data_to_sql(fiscStockData, "fiscdata", if_exists = "replace")    
     snpTickers = read_from_database("""SELECT Symbol  
                                   FROM fiscdata;""")
-    
-    #Do not currently want to wait it to fetch all 500 stocks so subsetting the amout for now.
-    stockdata = read_data_daily(snpTickers["Symbol"].tolist(), outputsize = "compact")   
+
+    stockdata = read_data_daily_alpaca(snpTickers.Symbol)
     write_data_to_sql(stockdata, "dailydata")
 
 
 if __name__ == "__main__":
-    main()
-
+    db_main()

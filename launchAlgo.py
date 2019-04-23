@@ -1,28 +1,21 @@
 #When the database is populated we can analyse the stocks and send trade orders.
-#The script also fetches new data on a daily basis
 
-import alpaca_trade_api as tradeapi
 import pandas as pd
 import time
 import sqlalchemy
 
-from populate_database import read_data_daily
+from populate_database import read_data_daily_alpaca
 from populate_database import write_data_to_sql
 from populate_database import read_from_database
+from populate_database import api
 
 #Database details
 from populate_database import serverSite
+from populate_database import db_main
 
-
-#Incoming..
 import talib
 
-#Alpaca tradeApi
-api = tradeapi.REST(
-    key_id="",
-    secret_key="",
-    base_url="https://paper-api.alpaca.markets"
-)
+
 
 sleepBetweenCalls = 10
 
@@ -131,14 +124,14 @@ def ma_crossing(ma, time_period):
             #Has the stock crossed above?Limiting to stocks over 10 USD
             if (data["EMA"+str(time_period)][0] < data.close[0] and data["EMA"+str(time_period)][1] > data.close[1]) and data.high[0] > 10:
                 watchlist.append([ticker,"buy", data.high[0]])
-                print("Found crossings for ", ticker)
+                print("Found ema crossings for ", ticker)
                 
             #Has the stock crossed below? Limiting to stocks over 10 USD
             if (data["EMA"+str(time_period)][0] > data.close[0] and data["EMA"+str(time_period)][1] < data.close[1]) and data.high[0] > 10:
                 watchlist.append([ticker,"sell",data.low[0]])
                 print("Found crossings for ", ticker)
                 
-            print("Found no crossings for ", ticker)
+            #print("Found no ema crossings for ", ticker)
         except:
             print("Database fetch has failed for ticker ", ticker)
                 
@@ -184,7 +177,7 @@ def get_watchlist_price(watchlist_df):
 
 
 #Define number of shares here
-def fire_orders_ema_cross(trades, side, now, time_period, ema_time_period):
+def fire_orders_ema_cross(trades, side, now, time_period):
     
     
     succesful_trades = []
@@ -213,12 +206,18 @@ def check_stoploss(current_trades,ema_time_period):
             trade.setStopPrice(data.stop_price[0])
             print("Stop price for ", trade.ticker," is set to ", trade.stopPrice)
         else:
-            #Get the close price of the last 1 minute candle and comapre it against the stop price
-            current_trade_price = api.get_barset(trade.ticker,'minute',limit = 1).df.iloc[0,3]
+            #Get the close price of the last 5 minute candle and comapre it against the stop price
+            #If the 5min candle has closed above the stop price, it will flatten the trade.
+            current_trade_price = api.get_barset(trade.ticker,"5min",limit = 1).df.iloc[0,3]
             if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
                 trade.flattenOrder()
+                current_trades.remove(trade)
             if (current_trade_price < trade.stopPrice and trade.orderSide == "buy"):
                 trade.flattenOrder()
+                current_trades.remove(trade)
+                
+                
+    return current_trades
 
     
     
@@ -230,14 +229,19 @@ def main():
         
         clock = api.get_clock()
         now = clock.timestamp
-        search_new_data(now)
-
         
-        #Create watchlist before market opens.
+        #Create watchlist and rewrite db before market opens.
         #if (api.get_clock == False and "9:00" in str(now)):
         col_lables = ["ticker","side","price"]
+        #Rebuild databse
+        print("Building database")
+        db_main()
+        print("Database ready")
+        #Create the watchlist
+        print("Building watchlist")
         watchlist = pd.DataFrame(ma_crossing("EMA", ema_time_period),columns = col_lables).sort_values("ticker")
         write_data_to_sql(pd.DataFrame(watchlist),"watchlist") #Replace is default, meaning yesterdays watchlist gets deleted.
+        print("Watchlist ready")
         
         #Trade!
         while api.get_clock().is_open:
@@ -245,12 +249,17 @@ def main():
             found_trades_long, found_trades_short = get_watchlist_price(watchlist)
             succ_trades_long = fire_orders_ema_cross(found_trades_long, "buy", str(now),ema_time_period)
             succ_trades_short = fire_orders_ema_cross(found_trades_short, "sell", str(now),ema_time_period)
-            active_trades.append(succ_trades_long + succ_trades_short)
+            
+            if (len(succ_trades_long + succ_trades_short) > 0):
+                for succ_trade in succ_trades_long + succ_trades_short:
+                    active_trades.append(succ_trade)
             
             traded_stocks = found_trades_long + found_trades_short
             
-            watchlist = watchlist[~watchlist.ticker.str.contains('|'.join(traded_stocks))]
-            check_stoploss(active_trades, ema_time_period)
+            if (len(traded_stocks) > 0):
+                watchlist = watchlist[~watchlist.ticker.str.contains('|'.join(traded_stocks))]
+                
+            active_trades = check_stoploss(active_trades, ema_time_period)
             
             
             
@@ -264,4 +273,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
