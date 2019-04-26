@@ -16,15 +16,10 @@ from populate_database import db_main
 import talib
 
 
-
+#Edit these
 sleepBetweenCalls = 10
-
-def getLastData():
-    query = """SELECT timestamp FROM dailydata ORDER BY timestamp  DESC limit 1;"""
-    engine = sqlalchemy.create_engine(serverSite)
-    lastData = pd.read_sql(query, engine)
-    return lastData.iloc[0,0]
-
+maxPosSize = 500
+maxPosValue = 5000
     
 class Trade:
     def __init__(self, ticker, posSize, orderSide, timeStamp):
@@ -36,9 +31,12 @@ class Trade:
         self.stopPrice = 0
         self.orderID = 0
         self.entryPrice = 0
+        self.currentPrice = 0
         self.costBasis = 0
         self.unrealPL = 0
         self.unrealPLprocent = 0
+        self.targetPrice = 0
+        self.last5MinCandle = None
         
     def submitOrder(self):
         order = api.submit_order(symbol = self.ticker,
@@ -48,24 +46,26 @@ class Trade:
                          time_in_force = "day")
         print("An order has been submitted for ", self.ticker, " qty: ", self.posSize)
         self.orderID = order.id
-        
-        order = api.get_order(self.orderID)
-        self.entryPrice = order.filled_avg_price
-        
-        
+        self.updateTradeDb(action = "Initiated trade", initiated = True)
         
         
     def cancelOrder(orderID):
         api.cancel_orderorder(orderID)
         
     def setStopPrice(self,stopPrice):
-        self.stopPrice = stopPrice
+        self.stopPrice = float(stopPrice)
+    
+    def setLast5MinCandle(self, candle):
+        self.last5MinCandle = candle
         
-    def flattenOrder(self):
+    def flattenOrder(self, action):
         flattenSide = ""
         if (self.orderSide == "buy"):
             flattenSide = "sell"
         else: flattenSide == "buy"
+        
+        #Save current trade specs.
+        self.setPosition()
         
         api.submit_order(symbol = self.ticker,
                          qty = self.posSize,
@@ -73,29 +73,41 @@ class Trade:
                          type = "market",
                          time_in_force = "day")
         print("An flatten order has been submitted for ", self.ticker, " qty: ", self.posSize)
+        self.updateTradeDb(action = action, initiated = False)
 
     
-    def getPosition(self):
-        order = api.get_position(self.ticker)
-        self.costBasis = order.cost_basis
-        self.unrealPL = order.unrealized_pl
-        self.unrealPLprocent = order.unrealized_plpc
+    def setPosition(self):
+        pos = api.get_position(self.ticker)
+        self.costBasis = pos.cost_basis
+        self.unrealPL = pos.unrealized_pl
+        self.unrealPLprocent = pos.unrealized_plpc
+        self.entryPrice = float(pos.avg_entry_price)
+        self.currentPrice = float(pos.current_price)
+        
+        #Keeping the history of all trades.
+    def updateTradeDb(self, action, initiated):
+        now = str(api.get_clock().timestamp)[0:19]
 
-def search_new_data(now):
-    
-        if api.get_clock == False and "12:00" in str(now):
-            #Read the latest data saved in the database:
-            lastData = getLastData()
-            #Read the latest possible data to get. Just testing with aapl, any ticker will do.
-            latestData = read_data_daily(tickers = ["AAPL"], outputsize = "compact").iloc[0:0]
-                        
-            #If the lastdata and latestdata is not the same and the time is 12:00 and market is closed we can search for new data!
-            if lastData != latestData:  
-                tickers = read_from_database("""SELECT Symbol  
-                                           FROM fiscdata""")
-                newStockData = read_data_daily(tickers, outputsize = "compact", saveLatestOnly = True)
-                write_data_to_sql(newStockData, "dailydata", if_exists = "append")
-                
+        #Different update depending on if the order was initiated of flattend.
+        if (initiated == False):
+            dfData = {"Timestamp": [now],
+                      "Ticker": [self.ticker],
+                      "Size":[self.posSize],
+                      "Side":[self.orderSide],
+                      "Action":[action],
+                      "Result":[self.currentPrice - self.entryPrice]}
+
+        if (initiated):
+            dfData = {"Timestamp": [now],
+                      "Ticker": [self.ticker],
+                      "Size":[self.posSize],
+                      "Side":[self.orderSide],
+                      "Action":["init"],
+                      "Result":["init"]}
+        
+        tradedb = pd.DataFrame(data = dfData)
+        
+        write_data_to_sql(tradedb,"tradehistory",if_exists = "append")
 
 def ma_crossing(ma, time_period):
     #This function finds stocks to trade.
@@ -110,7 +122,7 @@ def ma_crossing(ma, time_period):
                 
         try:
             #Only taking the time_period + 10 entries. No need to fetch all of the data.
-            data = read_from_database("Select timestamp, ticker, high, low, close from dailydata where ticker ='"+ ticker+"' ORDER BY timestamp DESC limit "+str(time_period+10)+";")
+            data = read_from_database("Select timestamp, ticker, high, low, close from dailydata where ticker ='"+ ticker+"' ORDER BY timestamp DESC limit "+str(time_period+100)+";")
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]
@@ -179,17 +191,45 @@ def get_watchlist_price(watchlist_df):
 #Define number of shares here
 def fire_orders_ema_cross(trades, side, now, time_period):
     
+    #Not able to convert the str to int whitout running through float.. must investigate later if there is a better solution.
+    current_bp = int(float(api.get_account().buying_power))
+
     
     succesful_trades = []
     for trade in trades:
         try:
-            live_trade = Trade(trade, 20, side, now)
+            
+            postValue = maxPosValue
+            posSize = maxPosSize
+    
+            #Setting max pos size. Either trade value is 8000 or 500 shares. Which ever is bigger.
+            current_price = api.get_barset(trade,"1Min",limit = 1).df.iloc[0,3]
+            if (current_price * posSize >postValue):
+                posSize = int(maxPosValue/current_price)
+                
+            #Check buying power, if not enough brake loop.    
+            if(current_bp < current_price + posSize):
+                print("No buying power")
+                break
+            
+            live_trade = Trade(trade, posSize, side, now)
+            
+            
             live_trade.submitOrder()
             succesful_trades.append(live_trade)
         except:
             print("Trade failed for ",trade)
     return succesful_trades
 
+
+
+def current_active_trade_prices(current_trades):
+    
+    for trade in current_trades:
+        current_candle = api.get_barset(trade.ticker,"5Min",limit = 1).df
+        trade.setLast5MinCandle(current_candle)
+        
+        
 
 def check_stoploss(current_trades,ema_time_period):
     #Note to self. Search all data at once, not every stock for themself.
@@ -208,17 +248,46 @@ def check_stoploss(current_trades,ema_time_period):
         else:
             #Get the close price of the last 5 minute candle and comapre it against the stop price
             #If the 5min candle has closed above the stop price, it will flatten the trade.
-            current_trade_price = api.get_barset(trade.ticker,"5min",limit = 1).df.iloc[0,3]
+            #current_trade_price = api.get_barset(trade.ticker,"5Min",limit = 1).df.iloc[0,3]
+            current_trade_price = trade.last5MinCandle.iloc[0,3]
             if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
-                trade.flattenOrder()
+                trade.flattenOrder(action = "Stoploss")
                 current_trades.remove(trade)
             if (current_trade_price < trade.stopPrice and trade.orderSide == "buy"):
-                trade.flattenOrder()
+                trade.flattenOrder(action = "Stoploss")
                 current_trades.remove(trade)
                 
                 
     return current_trades
 
+def check_target(current_trades):
+    #Set target price, and check if target price, current target is 2:1
+    for trade in current_trades:
+        if (trade.targetPrice  == 0):
+            
+            #update the current position info, sleep for a while so that the orders get filled.
+            time.sleep(10)
+            trade.setPosition()
+            
+            if(trade.orderSide == "buy"):
+                trade.targetPrice = trade.entryPrice + ((trade.entryPrice - trade.stopPrice)*2) 
+            else:
+                trade.targetPrice = trade.entryPrice - ((trade.stopPrice - trade.entryPrice)*2)
+            
+            print("Target price for ", trade.ticker," is set to ", trade.targetPrice)
+        else:
+            #Close the trade if the 1min candle high has hit the target
+            current_trade_price = trade.last5MinCandle.iloc[0,1]
+            if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
+                trade.flattenOrder(action = "Target")
+                current_trades.remove(trade)
+            if (current_trade_price < trade.stopPrice and trade.orderSide == "buy"):
+                trade.flattenOrder(action = "Target")
+                current_trades.remove(trade)
+    
+    return current_trades
+            
+            
     
     
 def main():
@@ -228,10 +297,10 @@ def main():
     while True: 
         
         clock = api.get_clock()
-        now = clock.timestamp
+        now = str(clock.timestamp)[0:19] #Get only current date an time.
         
         #Create watchlist and rewrite db before market opens.
-        #if (api.get_clock == False and "9:00" in str(now)):
+        #if (clock.is_open == False and "09:20" in now):
         col_lables = ["ticker","side","price"]
         #Rebuild databse
         print("Building database")
@@ -258,18 +327,35 @@ def main():
             
             if (len(traded_stocks) > 0):
                 watchlist = watchlist[~watchlist.ticker.str.contains('|'.join(traded_stocks))]
-                
+            #Get the active trade last 5min bars    
+            current_active_trade_prices(active_trades)
+            
+            #Check if the bar has closed below stoploss -> flatten trade
             active_trades = check_stoploss(active_trades, ema_time_period)
             
+            #Check if bar high is above target -> flatten trade.
+            active_trades = check_target(active_trades)
             
-            
-            
-            print("Waiting for orders")
+            #print("Waiting for orders")
                   
             time.sleep(sleepBetweenCalls)
             
-        time.sleep(sleepBetweenCalls)
+        time.sleep(sleepBetweenCalls*3)
+        
+        #Print out every hour that the system is still running.
+        if ("00" in now):
+            print("System is running", now)
     
 
 if __name__ == "__main__":
     main()
+    
+    
+
+
+
+
+
+    
+    
+    

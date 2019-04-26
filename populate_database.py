@@ -16,7 +16,8 @@ import alpaca_trade_api as tradeapi
 serverpass = "defaultpass" #insert your mysql serverpassword
 serveruser = "root" #insert your mysql serverpassword
 database = "stockdata" #database in your mysql you want to use. Need to be setup before running (Create DATABASE DatabaseName)
-serverSite = "mysql+pymysql://"+serveruser+":"+serverpass+"@localhost:3306/"+database
+serverAddres = "@localhost"
+serverSite = "mysql+pymysql://"+serveruser+":"+serverpass+serverAddres+":3306/"+database
 
 #Alpaca tradeApi
 api = tradeapi.REST(
