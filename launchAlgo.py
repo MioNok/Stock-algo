@@ -2,18 +2,17 @@
 
 import pandas as pd
 import time
-import sqlalchemy
+import talib
 
-from populate_database import read_data_daily_alpaca
+#Currently unused, but as backup.
+#from populate_database import read_data_daily_alpaca
+from populate_database import read_data_daily_IEX
 from populate_database import write_data_to_sql
 from populate_database import read_from_database
 from populate_database import api
 
 #Database details
-from populate_database import serverSite
 from populate_database import db_main
-
-import talib
 
 
 #Edit these
@@ -122,7 +121,7 @@ def ma_crossing(ma, time_period):
                 
         try:
             #Only taking the time_period + 10 entries. No need to fetch all of the data.
-            data = read_from_database("Select timestamp, ticker, high, low, close from dailydata where ticker ='"+ ticker+"' ORDER BY timestamp DESC limit "+str(time_period+100)+";")
+            data = read_from_database("Select date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit "+str(time_period+100)+";")
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]
@@ -236,7 +235,7 @@ def check_stoploss(current_trades,ema_time_period):
     #Find stop prices for the trades.
     for trade in current_trades:
         if (trade.stopPrice == 0) :
-            data = read_from_database("Select timestamp, ticker, high, low, close from dailydata where ticker ='"+ trade.ticker+ "' ORDER BY timestamp DESC limit "+str(ema_time_period+10)+";")
+            data = read_from_database("Select date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ trade.ticker+ "' ORDER BY date DESC limit "+str(ema_time_period+10)+";")
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]
@@ -265,7 +264,7 @@ def check_target(current_trades):
     for trade in current_trades:
         if (trade.targetPrice  == 0):
             
-            #update the current position info, sleep for a while so that the orders get filled.
+            #update the current position info, sleep for a while so that the orders  have time get filled.
             time.sleep(10)
             trade.setPosition()
             
@@ -288,57 +287,94 @@ def check_target(current_trades):
     return current_trades
             
             
-    
-    
-def main():
-    ema_time_period = 20
+def get_active_trades():
+    current_positions = api.list_positions()
     active_trades = []
     
+    for pos in current_positions:
+        #Currently "buy" is lingo for long, and "sell" is lingo for short.
+        #This makes creating and flatteing orders easier.
+        #Unfortunately the api does not currently allow shorts but it is ready here when it come available.
+        if (pos.side == "long"): 
+            side = "buy"
+        else: 
+            side = "sell"
+        
+        old_trade = Trade(ticker = pos.symbol,
+                          posSize = pos.qty,
+                          orderSide = side,
+                          timeStamp = "old")
+        
+        active_trades.append(old_trade)
+    
+    return active_trades 
+    
+
+def main():
+    ema_time_period = 20
+    
+    #Creating the database and putting the data for the last month as a base.
+    db_main(timeframe = "1m")
+    
+    #Look for currently active trades, make trade objects and append to active trades.
+    active_trades = get_active_trades()
+
     while True: 
         
         clock = api.get_clock()
         now = str(clock.timestamp)[0:19] #Get only current date an time.
         
         #Create watchlist and rewrite db before market opens.
-        #if (clock.is_open == False and "09:20" in now):
-        col_lables = ["ticker","side","price"]
-        #Rebuild databse
-        print("Building database")
-        db_main()
-        print("Database ready")
-        #Create the watchlist
-        print("Building watchlist")
-        watchlist = pd.DataFrame(ma_crossing("EMA", ema_time_period),columns = col_lables).sort_values("ticker")
-        write_data_to_sql(pd.DataFrame(watchlist),"watchlist") #Replace is default, meaning yesterdays watchlist gets deleted.
-        print("Watchlist ready")
-        
-        #Trade!
-        while api.get_clock().is_open:
-            #Loop trough watchlist and check if the value has been crossed. 
-            found_trades_long, found_trades_short = get_watchlist_price(watchlist)
-            succ_trades_long = fire_orders_ema_cross(found_trades_long, "buy", str(now),ema_time_period)
-            succ_trades_short = fire_orders_ema_cross(found_trades_short, "sell", str(now),ema_time_period)
+        if (clock.is_open == False and "09:20" in now):
             
-            if (len(succ_trades_long + succ_trades_short) > 0):
-                for succ_trade in succ_trades_long + succ_trades_short:
-                    active_trades.append(succ_trade)
+            latest_data_from_db = read_from_database("""SELECT date FROM dailydata ORDER BY date DESC limit 1;""").iloc[0,0]
+            latest_data_from_api = read_data_daily_IEX(["AAPL"],timeframe = "previous").iloc[0,0] #Testing what the latest data for aapl is, any ticker will do.
             
-            traded_stocks = found_trades_long + found_trades_short
+            #If there is new data, which is true every day except weekends and if the market was closed -> fetch previous days data.
+            if (latest_data_from_db != latest_data_from_api):
+                #Fetch more data
+                print("updating databse with latest data")
+                db_main(timeframe = "previous")
+                print("Database ready")
+                
+            #Create the watchlist
+            print("Building watchlist")
+            col_lables = ["ticker","side","price"]
+            watchlist = pd.DataFrame(ma_crossing("EMA", ema_time_period),columns = col_lables).sort_values("ticker")
+            write_data_to_sql(pd.DataFrame(watchlist),"watchlist") #Replace is default, meaning yesterdays watchlist gets deleted.
+            print("Watchlist ready")
             
-            if (len(traded_stocks) > 0):
-                watchlist = watchlist[~watchlist.ticker.str.contains('|'.join(traded_stocks))]
-            #Get the active trade last 5min bars    
-            current_active_trade_prices(active_trades)
             
-            #Check if the bar has closed below stoploss -> flatten trade
-            active_trades = check_stoploss(active_trades, ema_time_period)
+        if (api.get_clock().is_open): #Check if market is open
+            time.sleep(300) #Sleep for the first 5 min to avoid the larget market volatility
             
-            #Check if bar high is above target -> flatten trade.
-            active_trades = check_target(active_trades)
-            
-            #print("Waiting for orders")
-                  
-            time.sleep(sleepBetweenCalls)
+            #Trade!
+            while api.get_clock().is_open:
+                #Loop trough watchlist and check if the value has been crossed. 
+                found_trades_long, found_trades_short = get_watchlist_price(watchlist)
+                succ_trades_long = fire_orders_ema_cross(found_trades_long, "buy", str(now),ema_time_period)
+                succ_trades_short = fire_orders_ema_cross(found_trades_short, "sell", str(now),ema_time_period)
+                
+                if (len(succ_trades_long + succ_trades_short) > 0):
+                    for succ_trade in succ_trades_long + succ_trades_short:
+                        active_trades.append(succ_trade)
+                
+                traded_stocks = found_trades_long + found_trades_short
+                
+                if (len(traded_stocks) > 0):
+                    watchlist = watchlist[~watchlist.ticker.str.contains('|'.join(traded_stocks))]
+                #Get the active trade last 5min bars    
+                current_active_trade_prices(active_trades)
+                
+                #Check if the bar has closed below stoploss -> flatten trade
+                active_trades = check_stoploss(active_trades, ema_time_period)
+                
+                #Check if bar high is above target -> flatten trade.
+                active_trades = check_target(active_trades)
+                
+                #print("Waiting for orders")
+                      
+                time.sleep(sleepBetweenCalls)
             
         time.sleep(sleepBetweenCalls*3)
         
