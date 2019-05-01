@@ -15,18 +15,18 @@ import alpaca_trade_api as tradeapi
 serverpass = "defaultpass" #insert your mysql serverpassword
 serveruser = "rootUser" #insert your mysql serverpassword
 database = "stockdata" #database in your mysql you want to use. Need to be setup before running (Create DATABASE DatabaseName)
-serverAddres = "@testinstance.cqqzgxgyyebv.us-east-1.rds.amazonaws.com"
+serverAddres = "@localhost"
 serverSite = "mysql+pymysql://"+serveruser+":"+serverpass+serverAddres+":3306/"+database
 
 #Alpaca tradeApi
 api = tradeapi.REST(
-    key_id="PK010EVLXFSKTE3QTYWX",
-    secret_key="x5FjT8Tg1FJTcKz4/hiZ67D2mnwC3ud4sxKo9zbk",
+    key_id="",
+    secret_key="",
     base_url="https://paper-api.alpaca.markets"
 )
 
 #IEX apikey
-apikey = "pk_5464f8cba7ac4977ad59a62ff8c5e265"
+apikey = ""
 
 ##################################
 
