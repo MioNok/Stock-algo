@@ -8,25 +8,24 @@ import sqlalchemy
 import time
 import alpaca_trade_api as tradeapi
 
-
 ##################################
 
-#Edit these
-serverpass = "defaultpass" #insert your mysql serverpassword
-serveruser = "rootUser" #insert your mysql serverpassword
-database = "stockdata" #database in your mysql you want to use. Need to be setup before running (Create DATABASE DatabaseName)
-serverAddres = "@localhost"
-serverSite = "mysql+pymysql://"+serveruser+":"+serverpass+serverAddres+":3306/"+database
+#Must have variables
+#serverpass = "defaultpass" #insert your mysql serverpassword
+#serveruser = "rootUser" # your mysql serverpassword
+#database = "stockdata" #database in your mysql you want to use. Need to be setup before running (Create DATABASE DatabaseName)
+#serverAddress = "@testinstance.cqqzgxgyyebv.us-east-1.rds.amazonaws.com"
+#serverSite = "mysql+pymysql://"+serveruser+":"+serverpass+serverAddress+":3306/"+database
 
 #Alpaca tradeApi
-api = tradeapi.REST(
-    key_id="",
-    secret_key="",
-    base_url="https://paper-api.alpaca.markets"
-)
+#api = tradeapi.REST(
+#    key_id = "PK010EVLXFSKTE3QTYWX",
+#    secret_key = "x5FjT8Tg1FJTcKz4/hiZ67D2mnwC3ud4sxKo9zbk",
+#    base_url="https://paper-api.alpaca.markets"
+#)
 
 #IEX apikey
-apikey = ""
+#apikey = "Tpk_71d452afe1184e4a80d304d44d0819d5"
 
 ##################################
 
@@ -39,7 +38,7 @@ def getSnP500data():
 #This function is purely for backup purposes here
 #The problem with the Alpaca data currently is that it only return adjusted daily data,
 #However I need unadjusted data for the tehnical analysis. If for some reason the IEX API does not work, this can be used as a last resort.
-def read_data_alpaca(tickers, time_period = "day"):
+def read_data_alpaca(tickers,api, time_period = "day"):
     current_trade_prices = None
     index = 0
     while index < len(tickers):
@@ -80,77 +79,78 @@ def read_data_alpaca(tickers, time_period = "day"):
         
     return stockdata
 
-def get_iex_data(tickers, timeframe):
+def get_iex_data(tickers, timeframe, apikey):
     
     #Turn tickers to a str string for the api URL.
-    symbols = ""
-    for ticker in list(tickers):
-        symbols = symbols+","+ticker
-    
-    str_tickers = symbols[1:]
-        
-    #To stay below the threshold of 500k "messages" per month for the free apikey we will search once 1m data, 
-    #and then every day just the previous days data.
-    if (timeframe == "3m"):
-        stock_data = pd.read_json("https://cloud.iexapis.com/beta/stock/market/batch?symbols="+str_tickers+"&types=chart&range=3m&token="+apikey)
-    
-    elif(timeframe == "previous"): 
-        stock_data = pd.read_json("https://cloud.iexapis.com/beta/stock/market/batch?symbols="+str_tickers+"&types=previous&token="+apikey)
-    
-    else:
-        print("Unrecognized timeframe")
-    
-    #Transpose df for the loop
-    stock_data = stock_data.transpose()
-    
-    stock_data_final = pd.DataFrame()
-    
-    for key, element in stock_data.iterrows():
-        
-        if (timeframe == "3m"):
-            stock_data_temp = pd.DataFrame(element[0])
-            stock_data_temp["ticker"] = element.name
-        
-        #pd dataframe requiers that the index is given if the result only has one row..
-        
-        elif (timeframe == "previous"):
-            stock_data_temp = pd.DataFrame(element[0], index = [0])
-            stock_data_temp.rename(columns={"symbol":"ticker"}, inplace=True)
-        
-        stock_data_final = stock_data_final.append(stock_data_temp)
-    
-    return stock_data_final
-        
 
-def read_data_daily_IEX(tickers,timeframe):
-    
-    price_df = None
+    #To stay below the threshold of 500k "messages" per month for the free apikey we will search once 3m data, 
+    #and then every day just the previous days data.
     index = 0
-    while index <= len(tickers):
-        if price_df is None:
-            price_df = get_iex_data(tickers[index:index+50],timeframe = timeframe)
-        else:
-            price_df= price_df.append(get_iex_data(tickers[index:index+50],timeframe = timeframe))      
-        index = index + 50
-            
-    #print("Found data for", int(price_df.shape[1]/5),"stocks.")
+    stock_data_final = pd.DataFrame()
+    while index <len(tickers):
+        
+        symbols = ""
+        for ticker in list(tickers)[index:index+100]:
+            symbols = symbols+","+ticker
     
-    return price_df
+        str_tickers = symbols[1:]
+    
+        if (timeframe == "3m"):
+            stock_data = pd.read_json("https://cloud.iexapis.com/beta/stock/market/batch?symbols="+str_tickers+"&types=chart&range=3m&token="+apikey)
+        
+        elif(timeframe == "previous"): 
+            stock_data = pd.read_json("https://cloud.iexapis.com/beta/stock/market/batch?symbols="+str_tickers+"&types=previous&token="+apikey)
+        
+        else:
+            print("Unrecognized timeframe")
+        
+        #Transpose df for the loop
+        stock_data = stock_data.transpose()
+        
+        for key, element in stock_data.iterrows():
+            
+            if (timeframe == "3m"):
+                stock_data_temp = pd.DataFrame(element[0])
+                stock_data_temp["ticker"] = element.name
+            
+            #pd dataframe requiers that the index is given if the result only has one row..
+            
+            elif (timeframe == "previous"):
+                stock_data_temp = pd.DataFrame(element[0], index = [0])
+                stock_data_temp.rename(columns={"symbol":"ticker"}, inplace=True)
+            
+            stock_data_final = stock_data_final.append(stock_data_temp)
+            
+        index += 100
+        
+    return stock_data_final
+            
+
+#def read_data_daily_IEX(tickers,timeframe):
+#    
+#    price_df = None
+#    index = 0
+#    while index <= len(tickers):
+#        if price_df is None:
+#            price_df = get_iex_data(tickers[index:index+50],timeframe = timeframe)
+#        else:
+#            price_df= price_df.append(get_iex_data(tickers[index:index+50],timeframe = timeframe))      
+#        index = index + 50
+#            
+#    #print("Found data for", int(price_df.shape[1]/5),"stocks.")
+#    
+#    return price_df
     
 
 #Depending on if you are fetcing the data all at once or not appending or replaing the data might be the right option.
-def write_data_to_sql(df, table_name, if_exists = "replace"):
+def write_data_to_sql(df, table_name, serverSite, if_exists = "replace"  ):
     #you need mysql alchemy and pymysql to run this. syntax is:  Username:password@host:port/database
     engine = sqlalchemy.create_engine(serverSite)
     #Writing the data, name is table name. 
     df.to_sql(name = table_name, con = engine,index = False,  if_exists = if_exists)
 
-def read_snp_tickers():
-    query = """SELECT AVG(volume), ticker 
-            FROM dailydata 
-            GROUP BY ticker 
-            ORDER BY volume DESC 
-            LIMIT 350;"""
+def read_snp_tickers(serverSite, limit = 500 ):
+    query = "SELECT Symbol FROM fiscdata LIMIT"+str(limit)+";"
 
     #Creating the sqlalchemy engine and read sample data.
     engine = sqlalchemy.create_engine(serverSite)
@@ -158,7 +158,7 @@ def read_snp_tickers():
     return tickers
 
 
-def read_from_database(query):    
+def read_from_database(query, serverSite):    
     #Creating the sqlalchemy engine and read sample data.
     engine = sqlalchemy.create_engine(serverSite)
     fetchedData = pd.read_sql(query, engine)    
@@ -169,26 +169,24 @@ def read_from_database(query):
     
 #When lauching the db for the first time the timeframe should be 1m, it drops the old tables and creates new one whit new data.
 #Afterwards timeframe should be set to "previous". This meand that only the latets data is fetched and appended to the database.
-def db_main(timeframe):
-
+def db_main(server, apis, timeframe):
+    
+    
+    #Db functions
     fiscStockData = getSnP500data() 
-    write_data_to_sql(fiscStockData, "fiscdata", if_exists = "replace")
+    write_data_to_sql(fiscStockData, "fiscdata", serverSite = server.serverSite, if_exists = "replace",  )
     
-    #snpTickers = read_from_database("""SELECT Symbol  
-    #                              FROM fiscdata;""")
-    
-    #Only usse top 300 ticker with highest avg volume for now. 
-    #Comment this out if it is the 1st time running the script since the would not be a dailydata table before that.
-    snpTickers = read_snp_tickers()
+   
+    snpTickers = read_snp_tickers(server.serverSite,limit = 350)
 
     #stockdata = read_data_daily_alpaca(snpTickers.Symbol)
-    stockdata = read_data_daily_IEX(snpTickers.ticker, timeframe = timeframe)
+    stockdata = get_iex_data(snpTickers.Symbol, timeframe = timeframe, apikey = apis.iexKey)
     
     #If the timeframe is 3m that means that completely new data is brought and repleace it with the old, in other cases just get the latest data and append it.
     if (timeframe == "3m"):
-        write_data_to_sql(stockdata, "dailydata", if_exists = "replace")
+        write_data_to_sql(stockdata, "dailydata",serverSite = server.serverSite, if_exists = "replace" )
     elif(timeframe == "previous"):
-        write_data_to_sql(stockdata, "dailydata", if_exists = "append")
+        write_data_to_sql(stockdata, "dailydata",serversite = server.serverSite, if_exists = "append" )
 
 
 if __name__ == "__main__":

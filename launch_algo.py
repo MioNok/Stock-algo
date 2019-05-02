@@ -3,24 +3,88 @@
 import pandas as pd
 import time
 import talib
+import argparse
+import alpaca_trade_api as tradeapi
+import sqlalchemy
 
 #Currently unused, but as backup.
 #from populate_database import read_data_alpaca
-from populate_database import read_data_daily_IEX
+from populate_database import get_iex_data
 from populate_database import write_data_to_sql
 from populate_database import read_snp_tickers
 from populate_database import read_from_database
-from populate_database import api
 
 #Database details
 from populate_database import db_main
 
 
-#Edit these
+
+#Arguments
+#Must haves
+parser = argparse.ArgumentParser()
+parser.add_argument("serverUser", help= "server username", type = str)
+parser.add_argument("serverPass", help= "server password", type = str)
+parser.add_argument("serverAddress", help= "server addres", type = str)
+parser.add_argument("database", help= "the name of your database", type = str)
+parser.add_argument("alpacaKey", help= "alpaca api key", type = str)
+parser.add_argument("alpacaSKey", help= "alpaca secret api key", type = str)
+parser.add_argument("iexKey", help= "Iex api key", type = str)
+   
+#Optional 
+parser.add_argument("-pv","--posSize", help= "Max position size of a stock, default is  500", nargs = "?", default = 500, type = int)
+parser.add_argument("-ps","--posValue", help= "Max value of a position of a stock, default is 5000", nargs = "?", default = 5000, type = int)
+
+args = parser.parse_args()
+
+
+#Database variables    
+serverUser = args.serverUser    
+serverPass = args.serverPass
+serverAddress = args.serverAddress
+database = args.database
+alpacaKey = args.alpacaKey
+alpacaSKey = args.alpacaSKey
+iexKey = args.iexKey
+
+#Position variables    
+maxPosSize = args.posSize
+maxPosValue = args.posValue
+
+#Can edit if needed.
 sleepBetweenCalls = 10
-maxPosSize = 500
-maxPosValue = 5000
-    
+
+
+
+class Server:
+    def __init__(self, user, password, address, database):
+        self.user = user
+        self.password = password
+        self.address = address
+        self.database = database
+        self.serverSite = str("mysql+pymysql://"+self.user+":"+self.password+self.address+":3306/"+self.database)
+        
+class APIs:
+    def __init__(self, alpacaKey, alpacaSKey, iexKey):
+        self.alpacaKey = alpacaKey
+        self.alpacaSkey = alpacaSKey
+        self.iexKey = iexKey
+        
+        self.alpacaApi = tradeapi.REST(
+                       key_id = self.alpacaKey,
+                       secret_key = self.alpacaSkey,
+                       base_url="https://paper-api.alpaca.markets"
+                       ) 
+
+#Global variables
+server = Server(user = serverUser, password = serverPass, address = serverAddress, database = database)
+apis = APIs(alpacaKey, alpacaSKey, iexKey)   
+
+
+#serverPass = "defaultpass" #insert your mysql serverpassword
+#serverUser = "rootUser" # your mysql serverpassword
+#database = "stockdata" #database in your mysql you want to use. Need to be setup before running (Create DATABASE DatabaseName)
+#serverAddress = "@testinstance.cqqzgxgyyebv.us-east-1.rds.amazonaws.com"
+
 class Trade:
     def __init__(self, ticker, posSize, orderSide, timeStamp, strategy):
         print("An trade has been created")
@@ -40,7 +104,7 @@ class Trade:
         self.strategy = strategy
         
     def submitOrder(self):
-        order = api.submit_order(symbol = self.ticker,
+        order = apis.alpacaApi.submit_order(symbol = self.ticker,
                          qty = self.posSize,
                          side = self.orderSide,
                          type = "market",
@@ -51,7 +115,7 @@ class Trade:
         
         
     def cancelOrder(orderID):
-        api.cancel_orderorder(orderID)
+        apis.alpacaApi.cancel_orderorder(orderID)
         
     def setStopPrice(self,stopPrice):
         self.stopPrice = float(stopPrice)
@@ -68,7 +132,7 @@ class Trade:
         #Save current trade specs.
         self.setPosition()
         
-        api.submit_order(symbol = self.ticker,
+        apis.alpacaApi.submit_order(symbol = self.ticker,
                          qty = self.posSize,
                          side = flattenSide,
                          type = "market",
@@ -78,7 +142,7 @@ class Trade:
 
     
     def setPosition(self):
-        pos = api.get_position(self.ticker)
+        pos = apis.alpacaApi.get_position(self.ticker)
         self.costBasis = pos.cost_basis
         self.unrealPL = pos.unrealized_pl
         self.unrealPLprocent = pos.unrealized_plpc
@@ -87,7 +151,7 @@ class Trade:
         
         #Keeping the history of all trades.
     def updateTradeDb(self, action, initiated):
-        now = str(api.get_clock().timestamp)[0:19]
+        now = str(apis.alpacaApi.get_clock().timestamp)[0:19]
 
         #Different update depending on if the order was initiated of flattend.
         if (initiated == False):
@@ -110,7 +174,7 @@ class Trade:
         
         tradedb = pd.DataFrame(data = dfData)
         
-        write_data_to_sql(tradedb,"tradehistory",if_exists = "append")
+        write_data_to_sql(tradedb,"tradehistory",if_exists = "append", serverSite = server.serverSite)
 
 def ma_crossing(ma, time_period):
     #This function finds stocks to trade.
@@ -119,12 +183,12 @@ def ma_crossing(ma, time_period):
     #It is written so that the EMA/SMA and time period can be changed on the fly.
     watchlist = []
         
-    tickers = read_snp_tickers().ticker.tolist()
+    tickers = read_snp_tickers(server.serverSite).Symbol.tolist()[0:99]
     
     for ticker in tickers:
                 
         try:
-            data = read_from_database("Select date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit "+str(time_period+100)+";")
+            data = read_from_database("Select date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit "+str(time_period+100)+";", server.serverSite)
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]
@@ -147,6 +211,7 @@ def ma_crossing(ma, time_period):
                 print("Found crossings for ", ticker)
                 
             #print("Found no ema crossings for ", ticker)
+            #print("ma analyzed" , ticker)
         except:
             print("Database fetch has failed for ticker ", ticker)
                 
@@ -156,20 +221,22 @@ def find_hammer_doji():
     #The idea is to look at yesterdays candles, find hammes/dojis and then initiate trade if we get a new high.
     watchlist = []
     
-    tickers = read_snp_tickers().ticker.tolist()
+    tickers = read_snp_tickers(server.serverSite).Symbol.tolist()[0:99]
     
     for ticker in tickers:
         
         try:
             #Get the latest data only
-            data = read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 1;")
+            data = read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 1;",server.serverSite)
             
             data["doji"] = talib.CDLDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
             data["hammer"] = talib.CDLHAMMER(data.uOpen, data.uHigh, data.uLow, data.uClose)
             
             if (data.doji[0] == 100 | data.hammer[0] == 100):
                 watchlist.append([ticker,"buy",data.uHigh[0],"H/D"])
-            
+                print("Hd found" , ticker)
+                
+            #print("Hd analyzed" , ticker)
         except: 
             print("Database fetch has failed for ticker", ticker)
     
@@ -181,7 +248,7 @@ def find_hammer_doji():
             
 def get_watchlist_price(watchlist_df):
      
-    watchlist_bars = api.get_barset(watchlist_df.ticker,'minute',limit = 1).df
+    watchlist_bars = apis.alpacaApi.get_barset(watchlist_df.ticker,'minute',limit = 1).df
     
     #The API that returns real time data is not perfect in my opinion. 
     #It returns the last minute candle that the given tickes has traded, not neccecarliy the latest
@@ -221,9 +288,8 @@ def get_watchlist_price(watchlist_df):
 #Define number of shares here
 def fire_orders(trades, side, now, time_period, strategy):
     
-    current_bp = int(float(api.get_account().buying_power))
+    current_bp = int(float(apis.alpacaApi.get_account().buying_power))
 
-    
     succesful_trades = []
     for trade in trades:
         try:
@@ -232,7 +298,7 @@ def fire_orders(trades, side, now, time_period, strategy):
             posSize = maxPosSize
     
             #Setting max pos size. Either trade value is 8000 or 500 shares. Which ever is bigger.
-            current_price = api.get_barset(trade,"1Min",limit = 1).df.iloc[0,3]
+            current_price = apis.alpacaApi.get_barset(trade,"1Min",limit = 1).df.iloc[0,3]
             if (current_price * posSize >postValue):
                 posSize = int(maxPosValue/current_price)
                 
@@ -255,7 +321,7 @@ def fire_orders(trades, side, now, time_period, strategy):
 def current_active_trade_prices(current_trades):
     
     for trade in current_trades:
-        current_candle = api.get_barset(trade.ticker,"5Min",limit = 1).df
+        current_candle = apis.alpacaApi.get_barset(trade.ticker,"5Min",limit = 1).df
         trade.setLast5MinCandle(current_candle)
         
         
@@ -265,7 +331,7 @@ def check_stoploss(current_trades,ema_time_period):
     #Find stop prices for the trades.
     for trade in current_trades:
         if (trade.stopPrice == 0) :
-            data = read_from_database("Select date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ trade.ticker+ "' ORDER BY date DESC limit "+str(ema_time_period+10)+";")
+            data = read_from_database("Select date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ trade.ticker+ "' ORDER BY date DESC limit "+str(ema_time_period+10)+";",server.serverSite)
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]
@@ -277,7 +343,7 @@ def check_stoploss(current_trades,ema_time_period):
         else:
             #Get the close price of the last 5 minute candle and comapre it against the stop price
             #If the 5min candle has closed above the stop price, it will flatten the trade.
-            #current_trade_price = api.get_barset(trade.ticker,"5Min",limit = 1).df.iloc[0,3]
+            #current_trade_price = apis.alpacaApi.get_barset(trade.ticker,"5Min",limit = 1).df.iloc[0,3]
             current_trade_price = trade.last5MinCandle.iloc[0,3]
             if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
                 trade.flattenOrder(action = "Stoploss")
@@ -317,8 +383,8 @@ def check_target(current_trades):
     return current_trades
             
             
-def get_active_trades():
-    current_positions = api.list_positions()
+def get_active_trades(apis):
+    current_positions = apis.alpacaApi.list_positions()
     active_trades = []
     
     for pos in current_positions:
@@ -339,50 +405,56 @@ def get_active_trades():
         active_trades.append(old_trade)
     
     return active_trades 
-    
+
+
+
 
 def main():
+    
     ema_time_period = 20
     
     #Creating the database and putting the data for the last month as a base.
-    db_main(timeframe = "3m")
+    #db_main(server, apis,timeframe = "3m")
     
     #Look for currently active trades, make trade objects and append to active trades.
-    active_trades = get_active_trades()
+    active_trades = get_active_trades(apis)
 
     while True: 
         
-        clock = api.get_clock()
+        clock = apis.alpacaApi.get_clock()
         now = str(clock.timestamp)[0:19] #Get only current date an time.
         
         #Create watchlist and rewrite db before market opens.
-        if (clock.is_open == False and "09:00" in now):
+        if (clock.is_open == False and "09:14" in now):
             
-            latest_data_from_db = read_from_database("""SELECT date FROM dailydata ORDER BY date DESC limit 1;""").iloc[0,0]
-            latest_data_from_api = read_data_daily_IEX(["AAPL"],timeframe = "previous").iloc[0,0] #Testing what the latest data for aapl is, any ticker will do.
+            latest_data_from_db = read_from_database("SELECT date FROM dailydata ORDER BY date DESC limit 1;",server.serverSite).iloc[0,0]
+            latest_data_from_api = get_iex_data(["AAPL"],timeframe = "previous", apikey = apis.iexKey).iloc[0,0] #Testing what the latest data for aapl is, any ticker will do.
             
             #If there is new data, which is true every day except weekends and if the market was closed -> fetch previous days data.
             if (latest_data_from_db != latest_data_from_api):
                 #Fetch more data
                 print("updating databse with latest data")
-                db_main(timeframe = "previous")
+                db_main(server, apis, timeframe = "previous")
                 print("Database ready")
                 
             #Create the watchlist
             print("Building watchlist")
             col_lables = ["ticker","side","price","strategy"]
+            print("Ma watchlist ->")
             ma_watchlist = pd.DataFrame(ma_crossing("EMA", ema_time_period),columns = col_lables).sort_values("ticker")
+            print("hd watchlist ->")
             hd_watchlist = pd.DataFrame(find_hammer_doji(),columns = col_lables).sort_values("ticker")
-            write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist") #Replace is default, meaning yesterdays watchlist gets deleted.
-            write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist") 
+            write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist", server.serverSite) #Replace is default, meaning yesterdays watchlist gets deleted.
+            write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist", server.serverSite) 
             print("Watchlists ready")
             
             
-        if (api.get_clock().is_open): #Check if market is open
+        if (apis.alpacaApi.get_clock().is_open): #Check if market is open
+            print("Market open!")
             time.sleep(300) #Sleep for the first 5 min to avoid the larget market volatility
             
             #Trade!
-            while api.get_clock().is_open:
+            while apis.alpacaApi.get_clock().is_open:
                 
                 #Get the active trade last 5min bars    
                 current_active_trade_prices(active_trades)
@@ -394,12 +466,16 @@ def main():
                 active_trades = check_target(active_trades)
                 
                 #The idea behind this is that i can remotely add or remove trades from the database, and they would get updated here too.
-                ma_watchlist = read_from_database("""SELECT * from ma_watchlist""")
-                hd_watchlist = read_from_database("""SELECT * from hd_watchlist""")
-
+                #Read watchlists
+                ma_watchlist = read_from_database("SELECT * from ma_watchlist",server.serverSite)
+                hd_watchlist = read_from_database("SELECT * from hd_watchlist",server.serverSite)
+                
+                
                 #Loop trough watchlist and check if the value has been crossed. 
-                found_trades_long_ma, found_trades_short_ma = get_watchlist_price(ma_watchlist)
-                found_trades_long_hd, found_trades_short_hd = get_watchlist_price(hd_watchlist) #No short strades for the HD strategy should appear
+                if (len(ma_watchlist) >0):
+                    found_trades_long_ma, found_trades_short_ma = get_watchlist_price(ma_watchlist)
+                if (len(hd_watchlist) >0):
+                    found_trades_long_hd, found_trades_short_hd = get_watchlist_price(hd_watchlist) #No short strades for the HD strategy should appear
                 
                 #Fire trades
                 succ_trades_long_ma = fire_orders(found_trades_long_ma, "buy", str(now),ema_time_period,"20EMA")
@@ -412,15 +488,17 @@ def main():
                 
                 traded_stocks = found_trades_long_ma + found_trades_short_ma + found_trades_long_hd
                 
+                
+                #Delete trades from watchlist
                 if (len(traded_stocks) > 0):
                     ma_watchlist = ma_watchlist[~ma_watchlist.ticker.str.contains('|'.join(traded_stocks))]
                     #Update the db watchlist
-                    write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist") 
+                    write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist",server.serverSite) 
                     
                 if (len(traded_stocks) > 0):
                     hd_watchlist = hd_watchlist[~hd_watchlist.ticker.str.contains('|'.join(traded_stocks))]
                     #Update the db watchlist
-                    write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist") 
+                    write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist",server.serverSite) 
                 
                 
                 
@@ -436,7 +514,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
     
 
 
