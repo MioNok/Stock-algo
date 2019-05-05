@@ -5,7 +5,6 @@ import time
 import talib
 import argparse
 import alpaca_trade_api as tradeapi
-import sqlalchemy
 
 #Currently unused, but as backup.
 #from populate_database import read_data_alpaca
@@ -31,10 +30,12 @@ parser.add_argument("alpacaSKey", help= "alpaca secret api key", type = str)
 parser.add_argument("iexKey", help= "Iex api key", type = str)
    
 #Optional 
+parser.add_argument("-s","--startup",help="fetches 3m data if present", action='store_true')
 parser.add_argument("-pv","--posSize", help= "Max position size of a stock, default is  500", nargs = "?", default = 500, type = int)
 parser.add_argument("-ps","--posValue", help= "Max value of a position of a stock, default is 5000", nargs = "?", default = 5000, type = int)
 
 args = parser.parse_args()
+
 
 
 #Database variables    
@@ -46,9 +47,11 @@ alpacaKey = args.alpacaKey
 alpacaSKey = args.alpacaSKey
 iexKey = args.iexKey
 
-#Position variables    
+#Position variables
+startup = args.startup    
 maxPosSize = args.posSize
 maxPosValue = args.posValue
+
 
 #Can edit if needed.
 sleepBetweenCalls = 10
@@ -100,7 +103,7 @@ class Trade:
         self.unrealPL = 0
         self.unrealPLprocent = 0
         self.targetPrice = 0
-        self.last5MinCandle = None
+        self.last15MinCandle = None
         self.strategy = strategy
         
     def submitOrder(self):
@@ -120,8 +123,8 @@ class Trade:
     def setStopPrice(self,stopPrice):
         self.stopPrice = float(stopPrice)
     
-    def setLast5MinCandle(self, candle):
-        self.last5MinCandle = candle
+    def setLastCandle(self, candle):
+        self.last15MinCandle = candle
         
     def flattenOrder(self, action):
         flattenSide = ""
@@ -183,7 +186,7 @@ def ma_crossing(ma, time_period):
     #It is written so that the EMA/SMA and time period can be changed on the fly.
     watchlist = []
         
-    tickers = read_snp_tickers(server.serverSite).Symbol.tolist()[0:99]
+    tickers = read_snp_tickers(server.serverSite).Symbol.tolist()
     
     for ticker in tickers:
                 
@@ -210,18 +213,16 @@ def ma_crossing(ma, time_period):
                 watchlist.append([ticker,"sell",data.uLow[0],str(time_period)+"EMA"])
                 print("Found crossings for ", ticker)
                 
-            #print("Found no ema crossings for ", ticker)
-            #print("ma analyzed" , ticker)
         except:
             print("Database fetch has failed for ticker ", ticker)
                 
     return watchlist
 
 def find_hammer_doji():
-    #The idea is to look at yesterdays candles, find hammes/dojis and then initiate trade if we get a new high.
+    #The idea is to look at yesterdays candles, find hammes/dragonfly dojis and then initiate trade if we get a new high.
     watchlist = []
     
-    tickers = read_snp_tickers(server.serverSite).Symbol.tolist()[0:99]
+    tickers = read_snp_tickers(server.serverSite).Symbol.tolist()
     
     for ticker in tickers:
         
@@ -229,14 +230,13 @@ def find_hammer_doji():
             #Get the latest data only
             data = read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 1;",server.serverSite)
             
-            data["doji"] = talib.CDLDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
+            data["doji"] = talib.CDLDRAGONFLYDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
             data["hammer"] = talib.CDLHAMMER(data.uOpen, data.uHigh, data.uLow, data.uClose)
             
             if (data.doji[0] == 100 | data.hammer[0] == 100):
                 watchlist.append([ticker,"buy",data.uHigh[0],"H/D"])
                 print("Hd found" , ticker)
                 
-            #print("Hd analyzed" , ticker)
         except: 
             print("Database fetch has failed for ticker", ticker)
     
@@ -320,9 +320,10 @@ def fire_orders(trades, side, now, time_period, strategy):
 
 def current_active_trade_prices(current_trades):
     
+    #Get the latest 15min candle. Future trade decisions is made on the OHLC on it.
     for trade in current_trades:
-        current_candle = apis.alpacaApi.get_barset(trade.ticker,"5Min",limit = 1).df
-        trade.setLast5MinCandle(current_candle)
+        current_candle = apis.alpacaApi.get_barset(trade.ticker,"15Min",limit = 1).df
+        trade.setLastCandle(current_candle)
         
         
 
@@ -344,7 +345,7 @@ def check_stoploss(current_trades,ema_time_period):
             #Get the close price of the last 5 minute candle and comapre it against the stop price
             #If the 5min candle has closed above the stop price, it will flatten the trade.
             #current_trade_price = apis.alpacaApi.get_barset(trade.ticker,"5Min",limit = 1).df.iloc[0,3]
-            current_trade_price = trade.last5MinCandle.iloc[0,3]
+            current_trade_price = trade.last15MinCandle.iloc[0,3]
             if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
                 trade.flattenOrder(action = "Stoploss")
                 current_trades.remove(trade)
@@ -372,7 +373,7 @@ def check_target(current_trades):
             print("Target price for ", trade.ticker," is set to ", trade.targetPrice)
         else:
             #Close the trade if the 1min candle high has hit the target
-            current_trade_price = trade.last5MinCandle.iloc[0,1]
+            current_trade_price = trade.last15MinCandle.iloc[0,1]
             if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
                 trade.flattenOrder(action = "Target")
                 current_trades.remove(trade)
@@ -406,15 +407,27 @@ def get_active_trades(apis):
     
     return active_trades 
 
+def active_trades_to_db(active_trades, serverSite):
+    
+    active_trade_lists = []
+    for trade in active_trades:
+        tradeinfo = [trade.ticker, trade.posSize, trade.entryPrice, trade.stopPrice,trade.targetPrice,trade.strategy]
+        active_trade_lists.append(tradeinfo)
+    
+    colnames = ["ticker","PosSize","EntryPrice","StopPrice","TargetPrice","Strategy"]
+    active_trade_df = pd.DataFrame(active_trade_lists, columns = colnames)
+    write_data_to_sql(active_trade_df,"active_trades",serverSite)
 
-
+    
 
 def main():
     
     ema_time_period = 20
     
     #Creating the database and putting the data for the last month as a base.
-    #db_main(server, apis,timeframe = "3m")
+    if (startup):
+        print("Startup is true, populating the database wiht stockdata.")
+        db_main(server, apis,timeframe = "3m")
     
     #Look for currently active trades, make trade objects and append to active trades.
     active_trades = get_active_trades(apis)
@@ -423,9 +436,10 @@ def main():
         
         clock = apis.alpacaApi.get_clock()
         now = str(clock.timestamp)[0:19] #Get only current date an time.
+        db_main(server, apis, timeframe = "previous")
         
         #Create watchlist and rewrite db before market opens.
-        if (clock.is_open == False and "09:14" in now):
+        if (clock.is_open == False and "09:15" in now):
             
             latest_data_from_db = read_from_database("SELECT date FROM dailydata ORDER BY date DESC limit 1;",server.serverSite).iloc[0,0]
             latest_data_from_api = get_iex_data(["AAPL"],timeframe = "previous", apikey = apis.iexKey).iloc[0,0] #Testing what the latest data for aapl is, any ticker will do.
@@ -442,7 +456,7 @@ def main():
             col_lables = ["ticker","side","price","strategy"]
             print("Ma watchlist ->")
             ma_watchlist = pd.DataFrame(ma_crossing("EMA", ema_time_period),columns = col_lables).sort_values("ticker")
-            print("hd watchlist ->")
+            print("Hd watchlist ->")
             hd_watchlist = pd.DataFrame(find_hammer_doji(),columns = col_lables).sort_values("ticker")
             write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist", server.serverSite) #Replace is default, meaning yesterdays watchlist gets deleted.
             write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist", server.serverSite) 
@@ -456,7 +470,7 @@ def main():
             #Trade!
             while apis.alpacaApi.get_clock().is_open:
                 
-                #Get the active trade last 5min bars    
+                #Get the active trade last 15min bars    
                 current_active_trade_prices(active_trades)
                 
                 #Check if the bar has closed below stoploss -> flatten trade
@@ -471,11 +485,15 @@ def main():
                 hd_watchlist = read_from_database("SELECT * from hd_watchlist",server.serverSite)
                 
                 
+                #Sometimes the watchlists are empty, if so creating these lists to avoid having no lists later.
+                if (len(hd_watchlist) == 0):
+                    found_trades_long_hd = []
+                if (len(ma_watchlist) == 0):
+                    found_trades_long_ma = []
+                
                 #Loop trough watchlist and check if the value has been crossed. 
-                if (len(ma_watchlist) >0):
-                    found_trades_long_ma, found_trades_short_ma = get_watchlist_price(ma_watchlist)
-                if (len(hd_watchlist) >0):
-                    found_trades_long_hd, found_trades_short_hd = get_watchlist_price(hd_watchlist) #No short strades for the HD strategy should appear
+                found_trades_long_ma, found_trades_short_ma = get_watchlist_price(ma_watchlist)
+                found_trades_long_hd, found_trades_short_hd = get_watchlist_price(hd_watchlist) #No short strades for the HD strategy should appear
                 
                 #Fire trades
                 succ_trades_long_ma = fire_orders(found_trades_long_ma, "buy", str(now),ema_time_period,"20EMA")
@@ -501,14 +519,14 @@ def main():
                     write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist",server.serverSite) 
                 
                 
-                
-            
+                #update trades in db
+                active_trades_to_db(active_trades, server.serverSite)
                 time.sleep(sleepBetweenCalls)
             
         time.sleep(sleepBetweenCalls*3)
         
         #Print out that the system is still running.
-        if ("00" in now):
+        if ("00:00" in now):
             print("System is running", now)
     
 
