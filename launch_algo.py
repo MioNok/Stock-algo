@@ -21,16 +21,18 @@ from populate_database import db_main
 #Arguments
 #Must haves
 parser = argparse.ArgumentParser()
-parser.add_argument("serverUser", help= "server username", type = str)
-parser.add_argument("serverPass", help= "server password", type = str)
-parser.add_argument("serverAddress", help= "server addres", type = str)
-parser.add_argument("database", help= "the name of your database", type = str)
-parser.add_argument("alpacaKey", help= "alpaca api key", type = str)
-parser.add_argument("alpacaSKey", help= "alpaca secret api key", type = str)
-parser.add_argument("iexKey", help= "Iex api key", type = str)
+parser.add_argument("-su","--serverUser", help= "server username", required = True, type = str)
+parser.add_argument("-sp","--serverPass", help= "server password", required = True, type = str)
+parser.add_argument("-sa","--serverAddress", help= "server addres",required = True, type = str)
+parser.add_argument("-db","--database", help= "the name of your database",required = True, type = str)
+parser.add_argument("-ak","--alpacaKey", help= "alpaca api key", required = True, type = str)
+parser.add_argument("-ask","--alpacaSKey", help= "alpaca secret api key", required = True, type = str)
+parser.add_argument("-ik","--iexKey", help= "Iex api key", required = True, type = str)
    
 #Optional 
 parser.add_argument("-s","--startup",help="fetches 3m data if present", action='store_true')
+parser.add_argument("-sprev","--startupPrevious",help="fetches previous data", action='store_true')
+parser.add_argument("-wl","--watchlists",help="run watchlists at boot", action='store_true')
 parser.add_argument("-pv","--posSize", help= "Max position size of a stock, default is  500", nargs = "?", default = 500, type = int)
 parser.add_argument("-ps","--posValue", help= "Max value of a position of a stock, default is 5000", nargs = "?", default = 5000, type = int)
 
@@ -48,7 +50,9 @@ alpacaSKey = args.alpacaSKey
 iexKey = args.iexKey
 
 #Position variables
-startup = args.startup    
+startup = args.startup
+startupPrevious = args.startupPrevious    
+watchlists = args.watchlists
 maxPosSize = args.posSize
 maxPosValue = args.posValue
 
@@ -186,7 +190,7 @@ def ma_crossing(ma, time_period):
     #It is written so that the EMA/SMA and time period can be changed on the fly.
     watchlist = []
         
-    tickers = read_snp_tickers(server.serverSite).Symbol.tolist()
+    tickers = read_snp_tickers(server.serverSite).Symbol.tolist()[0:50]
     
     for ticker in tickers:
                 
@@ -426,20 +430,30 @@ def main():
     
     #Creating the database and putting the data for the last month as a base.
     if (startup):
-        print("Startup is true, populating the database wiht stockdata.")
+        print("Startup is true, populating the database with stockdata.")
         db_main(server, apis,timeframe = "3m")
+        
+    #Adding the previous data to the database at startup.
+    if (startupPrevious):
+        print("StartupPrevious is true, populating the database with previous days stockdata.")
+        db_main(server, apis,timeframe = "previous")
     
     #Look for currently active trades, make trade objects and append to active trades.
     active_trades = get_active_trades(apis)
-
+    print("Start complete")
+    
     while True: 
         
-        clock = apis.alpacaApi.get_clock()
-        now = str(clock.timestamp)[0:19] #Get only current date an time.
-        db_main(server, apis, timeframe = "previous")
+        #I have had instaces when the API has been unreachable.
+        try:
+            clock = apis.alpacaApi.get_clock()
+            now = str(clock.timestamp)[0:19] #Get only current date an time.
+        except:
+            print("Could not fetch clock")
         
+        print("Startup complete")
         #Create watchlist and rewrite db before market opens.
-        if (clock.is_open == False and "09:15" in now):
+        if ((clock.is_open == False and "09:15" in now) or watchlists):
             
             latest_data_from_db = read_from_database("SELECT date FROM dailydata ORDER BY date DESC limit 1;",server.serverSite).iloc[0,0]
             latest_data_from_api = get_iex_data(["AAPL"],timeframe = "previous", apikey = apis.iexKey).iloc[0,0] #Testing what the latest data for aapl is, any ticker will do.
@@ -484,22 +498,27 @@ def main():
                 ma_watchlist = read_from_database("SELECT * from ma_watchlist",server.serverSite)
                 hd_watchlist = read_from_database("SELECT * from hd_watchlist",server.serverSite)
                 
-                
-                #Sometimes the watchlists are empty, if so creating these lists to avoid having no lists later.
-                if (len(hd_watchlist) == 0):
-                    found_trades_long_hd = []
-                if (len(ma_watchlist) == 0):
+                #Loop trough watchlist and check if the value has been crossed and fire trades.
+                if (len(ma_watchlist) > 0):
+                    found_trades_long_ma, found_trades_short_ma = get_watchlist_price(hd_watchlist)
+                    succ_trades_long_ma = fire_orders(found_trades_long_ma, "buy", str(now),ema_time_period,"20EMA")
+                    succ_trades_short_ma = fire_orders(found_trades_short_ma, "sell", str(now),ema_time_period,"20EMA")
+                else:
+                    #If watchlist is empty, just create empty lists.
                     found_trades_long_ma = []
-                
-                #Loop trough watchlist and check if the value has been crossed. 
-                found_trades_long_ma, found_trades_short_ma = get_watchlist_price(ma_watchlist)
-                found_trades_long_hd, found_trades_short_hd = get_watchlist_price(hd_watchlist) #No short strades for the HD strategy should appear
-                
-                #Fire trades
-                succ_trades_long_ma = fire_orders(found_trades_long_ma, "buy", str(now),ema_time_period,"20EMA")
-                succ_trades_long_hd = fire_orders(found_trades_long_hd, "buy", str(now),ema_time_period,"H/D")
-                succ_trades_short_ma = fire_orders(found_trades_short_ma, "sell", str(now),ema_time_period,"20EMA")
-                
+                    found_trades_short_ma = []
+                    succ_trades_long_ma = []
+                    succ_trades_short_ma = []
+                      
+                if (len(hd_watchlist) >0):
+                    found_trades_long_hd, found_trades_short_hd = get_watchlist_price(ma_watchlist) #No short strades for the HD strategy should appear
+                    succ_trades_long_hd = fire_orders(found_trades_long_hd, "buy", str(now),ema_time_period,"H/D")   
+                else:
+                    #If watchlist is empty, just create empty lists.
+                    found_trades_long_hd = []
+                    succ_trades_long_hd = []
+
+                #Append succesfull trades to the active trades                
                 if (len(succ_trades_long_ma + succ_trades_short_ma + succ_trades_long_hd) > 0):
                     for succ_trade in succ_trades_long_ma + succ_trades_short_ma + succ_trades_long_hd:
                         active_trades.append(succ_trade)
