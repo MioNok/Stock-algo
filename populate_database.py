@@ -111,7 +111,8 @@ def write_data_to_sql(df, table_name, serverSite, if_exists = "replace"  ):
     #Writing the data, name is table name. 
     df.to_sql(name = table_name, con = engine,index = False,  if_exists = if_exists)
 
-def read_snp_tickers(serverSite, limit = 500 ):
+#You can specify a limit on how many stocks you want to fetch if desired. 
+def read_snp_tickers(serverSite, limit = 510 ):
     query = "SELECT Symbol FROM fiscdata LIMIT "+str(limit)+";"
 
     #Creating the sqlalchemy engine and read sample data.
@@ -139,7 +140,7 @@ def db_main(server, apis, timeframe):
     write_data_to_sql(fiscStockData, "fiscdata", serverSite = server.serverSite, if_exists = "replace",  )
     
     #Get the tickers.
-    snpTickers = read_snp_tickers(server.serverSite,limit = 510)
+    snpTickers = read_snp_tickers(server.serverSite)
 
     #stockdata = read_data_daily_alpaca(snpTickers.Symbol)
     stockdata = get_iex_data(snpTickers.Symbol, timeframe = timeframe, apikey = apis.iexKey)
