@@ -46,7 +46,7 @@ def ma_crossover(ma, time_period, server):
     return watchlist
 
 def hammer_doji(server):
-    #The idea is to look at yesterdays candles, find hammes/dragonfly dojis and then initiate trade if we get a new high.
+    #The idea is to look at yesterdays candles, find hammes/dragonfly dojis/dojix and then initiate trade if we get a new high.
     watchlist = []
     
     tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()
@@ -57,10 +57,11 @@ def hammer_doji(server):
             #Get the latest data only
             data = db.read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 1;",server.serverSite)
             
-            data["doji"] = talib.CDLDRAGONFLYDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
+            data["dojidf"] = talib.CDLDRAGONFLYDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
             data["hammer"] = talib.CDLHAMMER(data.uOpen, data.uHigh, data.uLow, data.uClose)
+            data["doji"] = talib.CDLDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
             
-            if (data.doji[0] == 100 | data.hammer[0] == 100):
+            if (data.dojidf[0] == 100 | data.hammer[0] == 100 | data.doji[0] == 100):
                 watchlist.append([ticker,"buy",data.uHigh[0],"H/D"])
                 print("Hd found" , ticker)
                 
