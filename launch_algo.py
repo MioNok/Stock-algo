@@ -402,7 +402,7 @@ def main():
             print("Watchlists ready")
             
             
-        if (apis.alpacaApi.get_clock().is_open): #Check if market is open
+        if (clock.is_open): #Check if market is open
             print("Market open!")
             time.sleep(900) #Sleep for the first 15 min to avoid the larget market volatility
             
