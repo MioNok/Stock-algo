@@ -136,9 +136,6 @@ def get_iex_quotes(tickers, apikey):
         index += 100
     
     return stock_quotes_final 
-    
-
-            
 
 #Depending on if you are fetcing the data all at once or not appending or replaing the data might be the right option.
 def write_data_to_sql(df, table_name, serverSite, if_exists = "replace"  ):

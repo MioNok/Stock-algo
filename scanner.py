@@ -16,6 +16,11 @@ def highs_lows(serverSite):
     
     query = "SELECT * FROM latestquotes"
     quotes = db.read_from_database(query,serverSite)
+    quotes.dropna(subset = ["week52High","week52Low"], inplace = True)
+    
+    quotes.week52High = quotes.week52High.astype('float')
+    quotes.week52Low = quotes.week52Low.astype('float')
+    quotes.close = quotes.close.astype('float')
     
     quotes["highdiff"] = quotes.week52High - quotes.close
     quotes["lowdiff"] = quotes.close - quotes.week52Low
@@ -39,7 +44,7 @@ def scannermain(apikey, serverSite, startup, alpacaApi):
             #Possible to run this at startup or a the specified time before open.
             tickers = db.read_snp_tickers(serverSite)
             #Get latest quotes
-            latest_quotes = db.get_iex_quotes(tickers.Symbol,apikey)
+            latest_quotes = db.get_iex_quotes(tickers.Symbol[0:100],apikey)
             db.write_data_to_sql(latest_quotes,"latestquotes",serverSite)
             print("Wrote quotes data to db")
             
@@ -47,7 +52,7 @@ def scannermain(apikey, serverSite, startup, alpacaApi):
             highs_lows(serverSite)
             print("Wrote highlows data to db")
             print("Startup done, exiting")
-            time.sleep(3)
+            time.sleep(2)
             exit()
             
         
