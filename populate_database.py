@@ -102,7 +102,40 @@ def get_iex_data(tickers, timeframe, apikey):
     #Dropping column "0" that is generated from the to_frame and transpose.    
     stock_data_final = stock_data_final.drop(stock_data_final.columns[0], axis=1) 
     return stock_data_final 
+
+def get_iex_quotes(tickers, apikey):
+    
+    #Get the latest quotes for the tickers in the list. Used for the gapscanner.
+    
+    index = 0
+    stock_quotes_final = pd.DataFrame()
+    while index <len(tickers):
+        
+        symbols = ""
+        for ticker in list(tickers)[index:index+100]:
+            symbols = symbols+","+ticker
+    
+        str_tickers = symbols[1:]
+    
+
+        stock_quotes = pd.read_json("https://cloud.iexapis.com/beta/stock/market/batch?symbols="+str_tickers+"&types=quote&token="+apikey)
+           
+        #Transpose df for the loop
+        stock_quotes = stock_quotes.transpose()
+        
+        for key, element in stock_quotes.iterrows():
             
+
+            stock_data_temp = pd.Series(element[0]).to_frame()
+            stock_data_temp = stock_data_temp.transpose()
+            
+            stock_data_temp.rename(columns={"symbol":"ticker"}, inplace=True)
+            
+            stock_quotes_final = stock_quotes_final.append(stock_data_temp)
+            
+        index += 100
+    
+    return stock_quotes_final 
 
 #Depending on if you are fetcing the data all at once or not appending or replaing the data might be the right option.
 def write_data_to_sql(df, table_name, serverSite, if_exists = "replace"  ):
