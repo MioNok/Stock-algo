@@ -1,4 +1,6 @@
 
+#This script contains the modules that the algo need to have to be able to inteact with the db. 
+
 import pandas as pd
 import sqlalchemy
 
@@ -100,7 +102,7 @@ def get_iex_data(tickers, timeframe, apikey):
         index += 100
         
     #Dropping column "0" that is generated from the to_frame and transpose.    
-    stock_data_final = stock_data_final.drop(stock_data_final.columns[0], axis=1) 
+    #stock_data_final = stock_data_final.drop(stock_data_final.columns[0], axis=1) 
     return stock_data_final 
 
 def get_iex_quotes(tickers, apikey):
@@ -143,6 +145,8 @@ def write_data_to_sql(df, table_name, serverSite, if_exists = "replace"  ):
     engine = sqlalchemy.create_engine(serverSite)
     #Writing the data, name is table name. 
     df.to_sql(name = table_name, con = engine,index = False,  if_exists = if_exists)
+    #Disposing the engine.
+    engine.dispose()
 
 #You can specify a limit on how many stocks you want to fetch if desired. 
 def read_snp_tickers(serverSite, limit = 510 ):
@@ -151,13 +155,15 @@ def read_snp_tickers(serverSite, limit = 510 ):
     #Creating the sqlalchemy engine and read sample data.
     engine = sqlalchemy.create_engine(serverSite)
     tickers = pd.read_sql(query, engine)
+    engine.dispose()
     return tickers
 
 
 def read_from_database(query, serverSite):    
     #Creating the sqlalchemy engine and read sample data.
     engine = sqlalchemy.create_engine(serverSite)
-    fetchedData = pd.read_sql(query, engine)    
+    fetchedData = pd.read_sql(query, engine)
+    engine.dispose()
     return fetchedData
 
     
@@ -182,5 +188,7 @@ def db_main(server, apis, timeframe):
     if (timeframe == "3m"):
         write_data_to_sql(stockdata, "dailydata",serverSite = server.serverSite, if_exists = "replace" )
     elif(timeframe == "previous"):
+        stockdata.drop( "change", axis = 1, inplace = True)
+        stockdata.drop( 0 , axis = 1, inplace = True)
         write_data_to_sql(stockdata, "dailydata",serverSite = server.serverSite, if_exists = "append" )
 

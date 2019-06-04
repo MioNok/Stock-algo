@@ -1,6 +1,7 @@
 ###
 #Stock scanner
 ##
+
 import populate_database as db
 import argparse
 import alpaca_trade_api as tradeapi
@@ -101,12 +102,13 @@ def parseargs():
     
     alpacaApi = tradeapi.REST(
                        key_id = args.alpacaKey,
-                       secret_key = args.alpacaSkey,
+                       secret_key = args.alpacaSKey,
                        base_url="https://paper-api.alpaca.markets"
                        )
     
     return iexKey, serverSite, startup, alpacaApi
     
 
-if __name__ == "__main__": 
-   scannermain(parseargs())
+if __name__ == "__main__":
+   iexKey, serverSite, startup, alpacaApi = parseargs()
+   scannermain(iexKey, serverSite, startup, alpacaApi)

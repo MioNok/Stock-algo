@@ -13,6 +13,7 @@ import strategies
 
 
 
+#Note to self, move the arguments to its own function..
 
 #Arguments
 #Must haves
@@ -376,13 +377,11 @@ def main():
         except:
             print("Could not fetch clock")
         
-        print("Startup complete")
         #Create watchlist and rewrite db before market opens.
         if ((clock.is_open == False and "09:15" in now) or watchlists):
             
-            latest_data_from_db = db.read_from_database("SELECT date FROM dailydata ORDER BY date DESC limit 1;",server.serverSite).iloc[0,0]
+            latest_data_from_db = db.read_from_database("SELECT date FROM dailydata ORDER BY date DESC limit 1;", server.serverSite).iloc[0,0]
             latest_data_from_api = db.get_iex_data(["AAPL"],timeframe = "previous", apikey = apis.iexKey).iloc[0,0] #Testing what the latest data for aapl is, any ticker will do.
-            
             #If there is new data, which is true every day except weekends and if the market was closed -> fetch previous days data.
             if (latest_data_from_db != latest_data_from_api):
                 #Fetch more data
@@ -394,9 +393,9 @@ def main():
             print("Building watchlist")
             col_lables = ["ticker","side","price","strategy"]
             print("Ma watchlist ->")
-            ma_watchlist = pd.DataFrame(strategies.ma_crossover("EMA", ema_time_period),columns = col_lables).sort_values("ticker")
+            ma_watchlist = pd.DataFrame(strategies.ma_crossover("EMA", ema_time_period, server),columns = col_lables).sort_values("ticker")
             print("Hd watchlist ->")
-            hd_watchlist = pd.DataFrame(strategies.hammer_doji(),columns = col_lables).sort_values("ticker")
+            hd_watchlist = pd.DataFrame(strategies.hammer_doji(server),columns = col_lables).sort_values("ticker")
             db.write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist", server.serverSite) #Replace is default, meaning yesterdays watchlist gets deleted.
             db.write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist", server.serverSite) 
             print("Watchlists ready")
@@ -425,7 +424,7 @@ def main():
                 
                 #Loop trough watchlist and check if the value has been crossed and fire trades.
                 if (len(ma_watchlist) > 0):
-                    found_trades_long_ma, found_trades_short_ma = get_watchlist_price(hd_watchlist)
+                    found_trades_long_ma, found_trades_short_ma = get_watchlist_price(ma_watchlist)
                     succ_trades_long_ma = fire_orders(found_trades_long_ma, "buy", str(now),ema_time_period,"20EMA")
                     succ_trades_short_ma = fire_orders(found_trades_short_ma, "sell", str(now),ema_time_period,"20EMA")
                 else:
@@ -436,7 +435,7 @@ def main():
                     succ_trades_short_ma = []
                       
                 if (len(hd_watchlist) >0):
-                    found_trades_long_hd, found_trades_short_hd = get_watchlist_price(ma_watchlist) #No short strades for the HD strategy should appear
+                    found_trades_long_hd, found_trades_short_hd = get_watchlist_price(hd_watchlist) #No short strades for the HD strategy should appear
                     succ_trades_long_hd = fire_orders(found_trades_long_hd, "buy", str(now),ema_time_period,"H/D")   
                 else:
                     #If watchlist is empty, just create empty lists.
