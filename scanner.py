@@ -15,6 +15,8 @@ def highs_lows(serverSite):
     high_tickers = pd.DataFrame()
     low_tickers = pd.DataFrame()
     
+    
+    
     query = "SELECT * FROM latestquotes"
     quotes = db.read_from_database(query,serverSite)
     quotes.dropna(subset = ["week52High","week52Low"], inplace = True)
@@ -33,8 +35,19 @@ def highs_lows(serverSite):
         if ((ticker[1].close * 0.02) > ticker[1].lowdiff):
             low_tickers = low_tickers.append(ticker[1])
             
-    db.write_data_to_sql(high_tickers, "hightickers",serverSite)
-    db.write_data_to_sql(low_tickers,"lowtickers",serverSite)
+    #Dont write data if it is empty!
+    #If it it empty write empty df to clear yesterdays data
+    empty_df = pd.DataFrame( columns = list(quotes))
+    
+    if len(high_tickers) > 0 :        
+        db.write_data_to_sql(high_tickers, "hightickers",serverSite)
+    else:
+        db.write_data_to_sql(empty_df,"hightickers",serverSite)
+        
+    if len(low_tickers) > 0 :
+        db.write_data_to_sql(low_tickers,"lowtickers",serverSite)
+    else:
+        db.write_data_to_sql(empty_df,"lowtickers",serverSite)
             
     
 
@@ -73,6 +86,7 @@ def scannermain(apikey, serverSite, startup, alpacaApi):
             #Get latest quotes
             latest_quotes = db.get_iex_quotes(tickers.Symbol,apikey)
             db.write_data_to_sql(latest_quotes,"latestquotes",serverSite)
+            
             #Get stocks close to highlows.
             highs_lows(serverSite)
             

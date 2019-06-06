@@ -276,7 +276,7 @@ def check_stoploss(current_trades,ema_time_period):
             #If the 5min candle has closed above the stop price, it will flatten the trade.
             #current_trade_price = apis.alpacaApi.get_barset(trade.ticker,"5Min",limit = 1).df.iloc[0,3]
             current_trade_price = trade.last15MinCandle.iloc[0,3]
-            if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
+            if (current_trade_price > trade.stopPrice  and trade.orderSide == "sell"):
                 trade.flattenOrder(action = "Stoploss")
                 current_trades.remove(trade)
             if (current_trade_price < trade.stopPrice and trade.orderSide == "buy"):
@@ -291,7 +291,7 @@ def check_target(current_trades):
     for trade in current_trades:
         if (trade.targetPrice  == 0):
             
-            #update the current position info, sleep for a while so that the orders  have time get filled.
+            #update the current position info, sleep for a while so that the orders have time get filled.
             time.sleep(5)
             trade.setPosition()
             
@@ -304,10 +304,11 @@ def check_target(current_trades):
         else:
             #Close the trade if the 1min candle high has hit the target
             current_trade_price = trade.last15MinCandle.iloc[0,1]
-            if (current_trade_price > trade.stopPrice and trade.orderSide == "sell"):
+            current_trade_price_low = trade.last15MinCandle.iloc[0,2]
+            if (current_trade_price_low < trade.targetPrice and trade.orderSide == "sell"):
                 trade.flattenOrder(action = "Target")
                 current_trades.remove(trade)
-            if (current_trade_price < trade.stopPrice and trade.orderSide == "buy"):
+            if (current_trade_price > trade.targetPrice and trade.orderSide == "buy"):
                 trade.flattenOrder(action = "Target")
                 current_trades.remove(trade)
     

@@ -95,7 +95,7 @@ def find_ma_crossovers(serverSite):
         bt_data["RSI"] = talib.RSI(bt_data.close) #Using default params
         bt_data["ATR"] = talib.ATR(bt_data.high, bt_data.low,bt_data.close)
         bt_data["TATR"] = talib.TRANGE(bt_data.high, bt_data.low,bt_data.close)
-        bt_data["BBUpper"],bt_data["BBmiddle"], bt_data["BBlower"] = talib.MACD(bt_data.close) #Using default params
+        bt_data["BBUpper"],bt_data["BBmiddle"], bt_data["BBlower"] = talib.BBANDS(bt_data.close, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0) #Using default params
         bt_data["dojiDH"] = talib.CDLDRAGONFLYDOJI(bt_data.open, bt_data.high, bt_data.low, bt_data.close)
         bt_data["hammer"] = talib.CDLHAMMER(bt_data.open, bt_data.high, bt_data.low, bt_data.close)
         bt_data["CDLDOJI"] = talib.CDLDOJI(bt_data.open, bt_data.high, bt_data.low, bt_data.close)

@@ -49,7 +49,7 @@ def hammer_doji(server):
     #The idea is to look at yesterdays candles, find hammes/dragonfly dojis/dojix and then initiate trade if we get a new high.
     watchlist = []
     
-    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()
+    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()[0:150]
     
     for ticker in tickers:
         
@@ -57,17 +57,55 @@ def hammer_doji(server):
             #Get the latest data only
             data = db.read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 1;",server.serverSite)
             
+            
             data["dojidf"] = talib.CDLDRAGONFLYDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
             data["hammer"] = talib.CDLHAMMER(data.uOpen, data.uHigh, data.uLow, data.uClose)
             data["doji"] = talib.CDLDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
             
-            if (data.dojidf[0] == 100 | data.hammer[0] == 100 | data.doji[0] == 100):
+            if (int(data.dojidf) == 100 | int(data.hammer) == 100 | int(data.doji) == 100):
                 watchlist.append([ticker,"buy",data.uHigh[0],"H/D"])
                 print("Hd found" , ticker)
+                
                 
         except: 
             print("Database fetch has failed for ticker", ticker)
     #Returns an list of lists with ticker, enrty price and strategy  
+    return watchlist
+
+
+def bb_cross(server):
+    #This function looks at the bollinger bands. If a stock closes below or above the upper /lower bollinger band we will execute a trade if the trend is in our favour
+    #We are using the 50SMA to look at the current trend of the stock.
+    watchlist = []
+        
+    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()
+    
+    for ticker in tickers:
+                
+        try:
+            data = db.read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 100;",server.serverSite)
+            
+            #Talib need the oldest data to be first     
+            data = data.iloc[::-1]
+        
+            data["SMA50"] = talib.SMA(data.uClose, timeperiod = 50)
+            data["BBupper"],data["BBmiddle"], data["BBlower"] = talib.BBANDS(data.uClose, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0) #Using default params
+
+            
+            #Has the stock peaked above Upper BB and we are downtrending? -> Short
+            if data.BBupper[0] < data.uHigh[0] and data.SMA50[0] < data.SMA50[2]:
+                watchlist.append([ticker,"sell", data.Low[0],"BB"])
+                print("Found BB crossings for ", ticker)
+                
+            #Has the stock peaked below lower BB and we are uptrending? -> Buy
+            if data.BBlower[0] > data.uLow[0] and data.SMA50[0] > data.SMA50[2]:
+                watchlist.append([ticker,"buy", data.uHigh[0],"BB"])
+                print("Found BB crossings for ", ticker)
+                
+        except:
+            print("Database fetch has failed for ticker ", ticker)
+            
+    #Returns an list of lists with ticker, enrty price and strategy          
     return watchlist
             
             

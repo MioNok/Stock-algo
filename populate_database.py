@@ -144,7 +144,7 @@ def write_data_to_sql(df, table_name, serverSite, if_exists = "replace"  ):
     #you need mysql alchemy and pymysql to run this. syntax is:  Username:password@host:port/database
     engine = sqlalchemy.create_engine(serverSite)
     #Writing the data, name is table name. 
-    df.to_sql(name = table_name, con = engine,index = False,  if_exists = if_exists)
+    df.to_sql(name = table_name, con = engine, index = False,  if_exists = if_exists)
     #Disposing the engine.
     engine.dispose()
 
