@@ -73,18 +73,18 @@ def hammer_doji(server):
     return watchlist
 
 
-def bb_cross(serverSite):
+def bb_cross(server):
     #This function looks at the bollinger bands. If a stock closes below or above the upper /lower bollinger band we will execute a trade if the trend is in our favour
     #We are using the 50SMA to look at the current trend of the stock.
     #I belive it would be pretty rare for this to find a buy.
     watchlist = []
         
-    tickers = db.read_snp_tickers(serverSite).Symbol.tolist()[0:100]
+    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()[0:100]
     
     for ticker in tickers:
                 
         try:
-            data = db.read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 100;",serverSite)
+            data = db.read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 100;",server.serverSite)
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]
