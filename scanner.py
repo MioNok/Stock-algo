@@ -6,7 +6,7 @@ import argparse
 import alpaca_trade_api as tradeapi
 import time
 import pandas as pd
-import datetime
+from datetime import datetime
 import talib
 
 #At boot the last fetch is set to "old", so when run for the first time it will always fetch new data.
@@ -112,7 +112,7 @@ def highs_lows(serverSite):
             
     
 
-def scannermain(apikey, serverSite, startup, alpacaApi):
+def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
     
     if (startup):
             print("Startup selected, running the functions now")
@@ -120,7 +120,7 @@ def scannermain(apikey, serverSite, startup, alpacaApi):
             tickers = db.read_snp_tickers(serverSite)
             #Get latest quotes
             #latest quotes are also used by the front to calculate the gappers
-            latest_quotes = db.get_iex_quotes(tickers.Symbol[0:100],apikey)
+            latest_quotes = db.get_iex_quotes(tickers.Symbol,apikey)
             db.write_data_to_sql(latest_quotes,"latestquotes",serverSite)
             print("Wrote quotes data to db")
             

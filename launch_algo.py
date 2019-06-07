@@ -174,9 +174,12 @@ class Trade:
         tradedb = pd.DataFrame(data = dfData)
         
         db.write_data_to_sql(tradedb,"tradehistory",if_exists = "append", serverSite = server.serverSite)
-  
     
-def get_watchlist_price(watchlist_df):
+    
+        
+  
+    #wl_code is the watchlist code that identifies to which wl should be updated.
+def get_watchlist_price(watchlist_df, wl_code):
      
     watchlist_bars = apis.alpacaApi.get_barset(watchlist_df.ticker,'minute',limit = 1).df
     
@@ -197,6 +200,9 @@ def get_watchlist_price(watchlist_df):
     watchlist_df["current_price"] = list(close_values)
     watchlist_df["price_difference"] = watchlist_df["price"]- watchlist_df["current_price"]
     
+    #Update the db prices 
+    db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server.serverSite)
+    
     found_trades_long = []
     found_trades_short = []
     
@@ -216,7 +222,7 @@ def get_watchlist_price(watchlist_df):
 
 
 #Define number of shares here
-def fire_orders(trades, side, now, time_period, strategy):
+def fire_orders(trades, side, now, strategy):
     
     current_bp = int(float(apis.alpacaApi.get_account().buying_power))
 
@@ -254,6 +260,7 @@ def current_active_trade_prices(current_trades):
     for trade in current_trades:
         current_candle = apis.alpacaApi.get_barset(trade.ticker,"15Min",limit = 1).df
         trade.setLastCandle(current_candle)
+        trade.setPositon()
         
         
 
@@ -397,8 +404,11 @@ def main():
             ma_watchlist = pd.DataFrame(strategies.ma_crossover("EMA", ema_time_period, server),columns = col_lables).sort_values("ticker")
             print("Hd watchlist ->")
             hd_watchlist = pd.DataFrame(strategies.hammer_doji(server),columns = col_lables).sort_values("ticker")
+            print("BB watchlist ->")
+            bb_watchlist = pd.DataFrame(strategies.bb_cross(server),columns = col_lables).sort_values("ticker")
             db.write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist", server.serverSite) #Replace is default, meaning yesterdays watchlist gets deleted.
             db.write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist", server.serverSite) 
+            db.write_data_to_sql(pd.DataFrame(bb_watchlist),"bb_watchlist", server.serverSite)
             print("Watchlists ready")
             
             
@@ -422,12 +432,13 @@ def main():
                 #Read watchlists
                 ma_watchlist = db.read_from_database("SELECT * from ma_watchlist",server.serverSite)
                 hd_watchlist = db.read_from_database("SELECT * from hd_watchlist",server.serverSite)
+                bb_watchlist = db.read_from_database("SELECT * from bb_watchlist",server.serverSite)
                 
                 #Loop trough watchlist and check if the value has been crossed and fire trades.
                 if (len(ma_watchlist) > 0):
-                    found_trades_long_ma, found_trades_short_ma = get_watchlist_price(ma_watchlist)
-                    succ_trades_long_ma = fire_orders(found_trades_long_ma, "buy", str(now),ema_time_period,"20EMA")
-                    succ_trades_short_ma = fire_orders(found_trades_short_ma, "sell", str(now),ema_time_period,"20EMA")
+                    found_trades_long_ma, found_trades_short_ma = get_watchlist_price(ma_watchlist, wl_code = "ma")
+                    succ_trades_long_ma = fire_orders(found_trades_long_ma, "buy", str(now),"20EMA")
+                    succ_trades_short_ma = fire_orders(found_trades_short_ma, "sell", str(now),"20EMA")
                 else:
                     #If watchlist is empty, just create empty lists.
                     found_trades_long_ma = []
@@ -436,33 +447,44 @@ def main():
                     succ_trades_short_ma = []
                       
                 if (len(hd_watchlist) >0):
-                    found_trades_long_hd, found_trades_short_hd = get_watchlist_price(hd_watchlist) #No short strades for the HD strategy should appear
-                    succ_trades_long_hd = fire_orders(found_trades_long_hd, "buy", str(now),ema_time_period,"H/D")   
+                    found_trades_long_hd, found_trades_short_hd = get_watchlist_price(hd_watchlist,wl_code = "hd") #No short strades for the HD strategy should appear
+                    succ_trades_long_hd = fire_orders(found_trades_long_hd, "buy", str(now),"H/D")   
                 else:
                     #If watchlist is empty, just create empty lists.
                     found_trades_long_hd = []
                     succ_trades_long_hd = []
+                    
+                #Loop trough watchlist and check if the value has been crossed and fire trades.
+                if (len(bb_watchlist) > 0):
+                    found_trades_long_bb, found_trades_short_bb = get_watchlist_price(ma_watchlist, wl_code = "bb")
+                    succ_trades_long_bb = fire_orders(found_trades_long_bb, "buy", str(now),"BB")
+                    succ_trades_short_bb = fire_orders(found_trades_short_bb, "sell", str(now),"BB")
+                else:
+                    #If watchlist is empty, just create empty lists.
+                    found_trades_long_bb = []
+                    found_trades_short_bb = []
+                    succ_trades_long_bb = []
+                    succ_trades_short_bb = []
 
                 #Append succesfull trades to the active trades                
-                if (len(succ_trades_long_ma + succ_trades_short_ma + succ_trades_long_hd) > 0):
-                    for succ_trade in succ_trades_long_ma + succ_trades_short_ma + succ_trades_long_hd:
+                if (len(succ_trades_long_ma + succ_trades_short_ma + succ_trades_long_hd + succ_trades_long_bb + succ_trades_short_bb) > 0):
+                    for succ_trade in succ_trades_long_ma + succ_trades_short_ma + succ_trades_long_hd+ succ_trades_long_bb + succ_trades_short_bb:
                         active_trades.append(succ_trade)
                 
-                traded_stocks = found_trades_long_ma + found_trades_short_ma + found_trades_long_hd
+                traded_stocks = found_trades_long_ma + found_trades_short_ma + found_trades_long_hd+ found_trades_short_bb + found_trades_long_bb
                 
                 
                 #Delete trades from watchlist
                 if (len(traded_stocks) > 0):
                     ma_watchlist = ma_watchlist[~ma_watchlist.ticker.str.contains('|'.join(traded_stocks))]
-                    #Update the db watchlist
-                    db.write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist",server.serverSite) 
-                    
-                if (len(traded_stocks) > 0):
                     hd_watchlist = hd_watchlist[~hd_watchlist.ticker.str.contains('|'.join(traded_stocks))]
+                    bb_watchlist = bb_watchlist[~hd_watchlist.ticker.str.contains('|'.join(traded_stocks))]
                     #Update the db watchlist
-                    db.write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist",server.serverSite) 
-                
-                
+                    db.write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist",server.serverSite)
+                    db.write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist",server.serverSite)
+                    db.write_data_to_sql(pd.DataFrame(bb_watchlist),"bb_watchlist",server.serverSite) 
+                    
+                    
                 #update trades in db
                 active_trades_to_db(active_trades, server.serverSite)
                 time.sleep(sleepBetweenCalls)

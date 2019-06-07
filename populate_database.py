@@ -105,6 +105,7 @@ def get_iex_data(tickers, timeframe, apikey):
     #stock_data_final = stock_data_final.drop(stock_data_final.columns[0], axis=1) 
     return stock_data_final 
 
+
 def get_iex_quotes(tickers, apikey):
     
     #Get the latest quotes for the tickers in the list. Used for the gapscanner.

@@ -49,7 +49,7 @@ def hammer_doji(server):
     #The idea is to look at yesterdays candles, find hammes/dragonfly dojis/dojix and then initiate trade if we get a new high.
     watchlist = []
     
-    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()[0:150]
+    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()
     
     for ticker in tickers:
         
@@ -73,17 +73,18 @@ def hammer_doji(server):
     return watchlist
 
 
-def bb_cross(server):
+def bb_cross(serverSite):
     #This function looks at the bollinger bands. If a stock closes below or above the upper /lower bollinger band we will execute a trade if the trend is in our favour
     #We are using the 50SMA to look at the current trend of the stock.
+    #I belive it would be pretty rare for this to find a buy.
     watchlist = []
         
-    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()
+    tickers = db.read_snp_tickers(serverSite).Symbol.tolist()[0:100]
     
     for ticker in tickers:
                 
         try:
-            data = db.read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 100;",server.serverSite)
+            data = db.read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 100;",serverSite)
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]
