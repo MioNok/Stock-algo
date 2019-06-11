@@ -80,7 +80,8 @@ def bb_cross(server):
     #I belive it would be pretty rare for this to find a buy.
     watchlist = []
         
-    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()
+
+    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()[0:100]
     
     for ticker in tickers:
                 
