@@ -1,7 +1,7 @@
 ###
 #Stock scanner
 ##
-import populate_database as db
+import algo.populate_database as db
 import argparse
 import alpaca_trade_api as tradeapi
 import time
@@ -117,10 +117,10 @@ def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
     if (startup):
             print("Startup selected, running the functions now")
             #Possible to run this at startup or a the specified time before open.
-            tickers = db.read_snp_tickers(serverSite)
+            tickers = db.read_from_database("Select distinct ticker from dailydata;", serverSite)
             #Get latest quotes
             #latest quotes are also used by the front to calculate the gappers
-            latest_quotes = db.get_iex_quotes(tickers.Symbol,apikey)
+            latest_quotes = db.get_iex_quotes(tickers.ticker,apikey)
             db.write_data_to_sql(latest_quotes,"latestquotes",serverSite)
             print("Wrote quotes data to db")
             
@@ -145,7 +145,7 @@ def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
             print("Could not fetch clock")    
         
         # Fetching the gappers and stocks close 52week highs and lows at 9:10 and write it to db for the front.
-        if (clock.is_open == False and "09:10" in now):
+        if (clock.is_open == False and "09:08" in now):
             
             #Get latest quotes
             latest_quotes = db.get_iex_quotes(tickers.Symbol,apikey)
