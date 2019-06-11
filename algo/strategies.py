@@ -81,7 +81,7 @@ def bb_cross(server):
     watchlist = []
         
 
-    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()[0:100]
+    tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()
     
     for ticker in tickers:
                 
