@@ -42,7 +42,7 @@ class Trade:
         self.strategy = strategy
         print("An trade has been created for ticker", self.ticker)
         
-    def submitOrder(self, apis):
+    def submitOrder(self, apis, algo = "charlie"):
         order = apis.alpacaApi.submit_order(symbol = self.ticker,
                          qty = self.posSize,
                          side = self.orderSide,
@@ -50,7 +50,7 @@ class Trade:
                          time_in_force = "day")
         print("An order has been submitted for ", self.ticker, " qty: ", self.posSize)
         self.orderID = order.id
-        self.updateTradeDb(action = "Initiated trade", initiated = True, apis = apis)
+        self.updateTradeDb(action = "Initiated trade", initiated = True, apis = apis, algo = algo)
         
         
     def cancelOrder(orderID, apis):
@@ -62,14 +62,14 @@ class Trade:
     def setLastCandle(self, candle):
         self.last15MinCandle = candle
         
-    def flattenOrder(self, action, apis):
+    def flattenOrder(self, action, apis, server, algo = "charlie"):
         flattenSide = ""
         if (self.orderSide == "buy"):
             flattenSide = "sell"
         else: flattenSide == "buy"
         
         #Save current trade specs.
-        self.setPosition()
+        self.setPosition(apis)
         
         apis.alpacaApi.submit_order(symbol = self.ticker,
                          qty = self.posSize,
@@ -77,7 +77,7 @@ class Trade:
                          type = "market",
                          time_in_force = "day")
         print("An flatten order has been submitted for ", self.ticker, " qty: ", self.posSize)
-        self.updateTradeDb(action = action, initiated = False, apis = apis)
+        self.updateTradeDb(action = action, initiated = False, apis = apis, server = server, algo = algo)
 
     
     def setPosition(self, apis):
@@ -89,7 +89,7 @@ class Trade:
         self.currentPrice = float(pos.current_price)
         
         #Keeping the history of all trades.
-    def updateTradeDb(self, action, initiated, apis):
+    def updateTradeDb(self, action, initiated, apis, server, algo = "charlie"):
         now = str(apis.alpacaApi.get_clock().timestamp)[0:19]
 
         #Different update depending on if the order was initiated of flattend.
@@ -112,6 +112,11 @@ class Trade:
                       "Result":["init"]}
         
         tradedb = pd.DataFrame(data = dfData)
+        if algo == "charlie":
+            db.write_data_to_sql(tradedb,"tradehistory",if_exists = "append", serverSite = server.serverSite)
+        elif algo == "delta":
+            db.write_data_to_sql(tradedb,"tradehistory_delta",if_exists = "append", serverSite = server.serverSite)
+            
         
-        db.write_data_to_sql(tradedb,"tradehistory",if_exists = "append", serverSite = server.serverSite)
+        
     

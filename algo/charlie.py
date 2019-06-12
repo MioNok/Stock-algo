@@ -12,7 +12,7 @@ def run_charlie(server, apis, active_trades, ema_time_period, maxPosSize, maxPos
     active_trades = func.check_stoploss(active_trades, ema_time_period, server, apis)
     
     #Check if bar high is above target -> flatten trade.
-    active_trades = func.check_target(active_trades, apis)
+    active_trades = func.check_target(active_trades, apis, server)
     
     #The idea behind this is that i can remotely add or remove trades from the database, and they would get updated here too.
     #Read watchlists

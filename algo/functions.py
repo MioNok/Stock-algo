@@ -52,7 +52,7 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
 
 
 #Define number of shares here
-def fire_orders(trades, side, now, strategy,apis ,maxPosValue, maxPosSize):
+def fire_orders(trades, side, now, strategy,apis ,maxPosValue, maxPosSize, algo = "charlie"):
     
     current_bp = int(float(apis.alpacaApi.get_account().buying_power))
 
@@ -76,7 +76,7 @@ def fire_orders(trades, side, now, strategy,apis ,maxPosValue, maxPosSize):
             live_trade = Trade(trade, posSize, side, now, strategy)
             
             
-            live_trade.submitOrder()
+            live_trade.submitOrder(apis, algo = algo)
             succesful_trades.append(live_trade)
         except:
             print("Trade failed for ",trade)
@@ -94,7 +94,7 @@ def current_active_trade_prices(current_trades, apis):
         
         
 
-def check_stoploss(current_trades,ema_time_period, server,apis):
+def check_stoploss(current_trades,ema_time_period, server,apis, algo = "charlie"):
     #Note to self. Search all data at once, not every stock for themself.
     #Find stop prices for the trades.
     for trade in current_trades:
@@ -114,16 +114,16 @@ def check_stoploss(current_trades,ema_time_period, server,apis):
             #current_trade_price = apis.alpacaApi.get_barset(trade.ticker,"5Min",limit = 1).df.iloc[0,3]
             current_trade_price = trade.last15MinCandle.iloc[0,3]
             if (current_trade_price > trade.stopPrice  and trade.orderSide == "sell"):
-                trade.flattenOrder(action = "Stoploss", apis = apis)
+                trade.flattenOrder(action = "Stoploss", apis = apis, server = server, algo = algo)
                 current_trades.remove(trade)
             if (current_trade_price < trade.stopPrice and trade.orderSide == "buy"):
-                trade.flattenOrder(action = "Stoploss", apis = apis)
+                trade.flattenOrder(action = "Stoploss", apis = apis, server = server, algo= algo)
                 current_trades.remove(trade)
                 
                 
     return current_trades
 
-def check_target(current_trades,apis):
+def check_target(current_trades,apis, server, algo = "charlie"):
     #Set target price, and check if target price, current target is 2:1
     for trade in current_trades:
         if (trade.targetPrice  == 0):
@@ -143,10 +143,10 @@ def check_target(current_trades,apis):
             current_trade_price = trade.last15MinCandle.iloc[0,1]
             current_trade_price_low = trade.last15MinCandle.iloc[0,2]
             if (current_trade_price_low < trade.targetPrice and trade.orderSide == "sell"):
-                trade.flattenOrder(action = "Target",apis = apis)
+                trade.flattenOrder(action = "Target",apis = apis,server = server, algo = algo)
                 current_trades.remove(trade)
             if (current_trade_price > trade.targetPrice and trade.orderSide == "buy"):
-                trade.flattenOrder(action = "Target", apis = apis)
+                trade.flattenOrder(action = "Target", apis = apis, server = server, algo = algo)
                 current_trades.remove(trade)
     
     return current_trades

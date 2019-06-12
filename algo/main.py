@@ -75,7 +75,7 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
             print("Could not fetch clock")
         
         #Create charlie watchlist and rewrite db before market opens.
-        if ((clock.is_open == False and "09:15" in now) or watchlists):
+        if ((clock.is_open == False and "09:05" in now) or watchlists):
             
             latest_data_from_db = db.read_from_database("SELECT date FROM dailydata ORDER BY date DESC limit 1;", server.serverSite).iloc[0,0]
             latest_data_from_api = db.get_iex_data(["AAPL"],timeframe = "previous", apikey = apis.iexKey).iloc[0,0] #Testing what the latest data for aapl is, any ticker will do.

@@ -144,12 +144,16 @@ def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
         except:
             print("Could not fetch clock")    
         
-        # Fetching the gappers and stocks close 52week highs and lows at 9:10 and write it to db for the front.
-        if (clock.is_open == False and "09:08" in now):
+        # Fetching the gappers and stocks close 52week highs and lows at 9:20 and write it to db for the front.
+        if (clock.is_open == False and "09:15" in now):
             
-            #Get latest quotes
-            latest_quotes = db.get_iex_quotes(tickers.Symbol,apikey)
+            print("Ding Ding Ding")
+            
+            #Get latest tickers and quotes
+            tickers = db.read_from_database("Select distinct ticker from dailydata;", serverSite)
+            latest_quotes = db.get_iex_quotes(list(tickers.ticker),apikey)
             db.write_data_to_sql(latest_quotes,"latestquotes",serverSite)
+            print("Wrote quotes data to db")
             
             #Get stocks close to highlows.
             highs_lows(serverSite)
