@@ -59,12 +59,12 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
     
     #Look for currently active charlie trades, make trade objects and append to active trades.
     active_trades = get_active_trades(apis)
-    print("Start complete")
+    print("Start complete Charlie")
     
     #Look for currently active delta trades, make trade objects and append to active trades.
     active_trades_delta = get_active_trades(apis_delta)
-    print("Start complete")
-    
+    print("Start complete Delta")
+
     while True: 
         
         #I have had instaces when the API has been unreachable.
@@ -105,10 +105,17 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
             db.write_data_to_sql(pd.DataFrame(week_watchlist),"week_watchlist", server.serverSite)
             print("Watchlists ready")
             
+            try:
+                clock = apis.alpacaApi.get_clock()
+                now = str(clock.timestamp)[0:19] #Get only current date an time.
+            except:
+                print("Could not fetch clock")
+            
             
         if (clock.is_open): #Check if market is open
             print("Market open!")
             time.sleep(900) #Sleep for the first 15 min to avoid the larget market volatility
+            
             while apis.alpacaApi.get_clock().is_open:
                 try:
                     clock = apis.alpacaApi.get_clock()
@@ -116,8 +123,9 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
                 except:
                     print("Could not fetch clock")
             
-                
+                #Running charlie
                 charlie.run_charlie(server, apis, active_trades, ema_time_period, maxPosSize, maxPosValue, now)
+                #Running delta
                 delta.run_delta(server, apis_delta, active_trades_delta,ema_time_period, maxPosSize,maxPosValue, now)
                 #Add more algos here
                 
@@ -133,8 +141,7 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
             
 def parseargs():
     parser = argparse.ArgumentParser()
-    
-   #Note to self, move the arguments to its own function..
+
 
     #Arguments
     #Must haves

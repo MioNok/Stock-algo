@@ -117,7 +117,7 @@ def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
     if (startup):
             print("Startup selected, running the functions now")
             #Possible to run this at startup or a the specified time before open.
-            tickers = db.read_from_database("Select distinct ticker from dailydata;", serverSite)
+            tickers = db.read_from_database("Select distinct ticker from dailydata;", serverSite).dropna()
             #Get latest quotes
             #latest quotes are also used by the front to calculate the gappers
             latest_quotes = db.get_iex_quotes(tickers.ticker,apikey)
@@ -135,7 +135,8 @@ def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
             time.sleep(2)
             exit()
             
-        
+    print("Running loop")  
+    
     while(True):
          #I have had instaces when the API has been unreachable.
         try:
@@ -150,7 +151,7 @@ def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
             print("Ding Ding Ding")
             
             #Get latest tickers and quotes
-            tickers = db.read_from_database("Select distinct ticker from dailydata;", serverSite)
+            tickers = db.read_from_database("Select distinct ticker from dailydata;", serverSite).dropna()
             latest_quotes = db.get_iex_quotes(list(tickers.ticker),apikey)
             db.write_data_to_sql(latest_quotes,"latestquotes",serverSite)
             print("Wrote quotes data to db")

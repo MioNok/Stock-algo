@@ -52,7 +52,7 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
 
 
 #Define number of shares here
-def fire_orders(trades, side, now, strategy,apis ,maxPosValue, maxPosSize, algo = "charlie"):
+def fire_orders(trades, side, now, strategy, apis, server, maxPosSize, maxPosValue, algo = "charlie"):
     
     current_bp = int(float(apis.alpacaApi.get_account().buying_power))
 
@@ -63,7 +63,7 @@ def fire_orders(trades, side, now, strategy,apis ,maxPosValue, maxPosSize, algo 
             postValue = maxPosValue
             posSize = maxPosSize
     
-            #Setting max pos size. Either trade value is 8000 or 500 shares. Which ever is bigger.
+            #Setting max pos size. Either trade value is 5000 or 500 shares. Which ever is bigger.
             current_price = apis.alpacaApi.get_barset(trade,"1Min",limit = 1).df.iloc[0,3]
             if (current_price * posSize >postValue):
                 posSize = int(maxPosValue/current_price)
@@ -76,7 +76,7 @@ def fire_orders(trades, side, now, strategy,apis ,maxPosValue, maxPosSize, algo 
             live_trade = Trade(trade, posSize, side, now, strategy)
             
             
-            live_trade.submitOrder(apis, algo = algo)
+            live_trade.submitOrder(apis,server, algo = algo)
             succesful_trades.append(live_trade)
         except:
             print("Trade failed for ",trade)

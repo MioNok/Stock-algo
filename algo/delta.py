@@ -5,7 +5,7 @@ import functions as func
 import populate_database as db
 import pandas as pd
 
-def run_delta(server, apis_delta, active_trades_delta,ema_time_period, maxPosSize,maxPosValue, now):
+def run_delta(server, apis_delta, active_trades_delta,ema_time_period, maxPosSize, maxPosValue, now):
     
    
     #Get the active trade last 15min bars    
@@ -23,9 +23,9 @@ def run_delta(server, apis_delta, active_trades_delta,ema_time_period, maxPosSiz
     
     #Loop trough watchlist and check if the value has been crossed and fire trades.
     if (len(week_watchlist) > 0):
-        found_trades_long_week, found_trades_short_week = func.get_watchlist_price(week_watchlist, "ma",apis_delta, server)
-        succ_trades_long_week = func.fire_orders(found_trades_long_week, "buy", str(now),"Week52", apis_delta, maxPosSize, maxPosValue, algo = "delta")
-        succ_trades_short_week = func.fire_orders(found_trades_short_week, "sell", str(now),"Week52", apis_delta, maxPosSize, maxPosValue, algo = "delta")
+        found_trades_long_week, found_trades_short_week = func.get_watchlist_price(week_watchlist, "week",apis_delta, server)
+        succ_trades_long_week = func.fire_orders(found_trades_long_week, "buy", str(now),"Week52", apis_delta, server, maxPosSize, maxPosValue, algo = "delta")
+        succ_trades_short_week = func.fire_orders(found_trades_short_week, "sell", str(now),"Week52", apis_delta, server, maxPosSize, maxPosValue, algo = "delta")
     else:
         #If watchlist is empty, just create empty lists.
         found_trades_long_week = []

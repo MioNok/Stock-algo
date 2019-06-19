@@ -33,7 +33,7 @@ def ma_crossover(ma, time_period, server):
             #Has the stock crossed above?Limiting to stocks over 10 USD
             if (data["EMA"+str(time_period)][0] < data.uClose[0] and data["EMA"+str(time_period)][1] > data.uClose[1]) and data.uHigh[0] > 10:
                 watchlist.append([ticker,"buy", data.uHigh[0],str(time_period)+"EMA"])
-                print("Found ema crossings for ", ticker)
+                print("Found crossings for ", ticker)
                 
             #Has the stock crossed below? Limiting to stocks over 10 USD
             if (data["EMA"+str(time_period)][0] > data.uClose[0] and data["EMA"+str(time_period)][1] < data.uClose[1]) and data.uHigh[0] > 10:
@@ -47,7 +47,7 @@ def ma_crossover(ma, time_period, server):
     return watchlist
 
 def hammer_doji(server):
-    #The idea is to look at yesterdays candles, find hammes/dragonfly dojis/dojix and then initiate trade if we get a new high.
+    #The idea is to look at yesterdays candles, find hammes/dragonfly dojis/dojis and then initiate trade if we get a new high.
     watchlist = []
     
     tickers = db.read_snp_tickers(server.serverSite).Symbol.tolist()

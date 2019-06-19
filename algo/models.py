@@ -42,15 +42,15 @@ class Trade:
         self.strategy = strategy
         print("An trade has been created for ticker", self.ticker)
         
-    def submitOrder(self, apis, algo = "charlie"):
+    def submitOrder(self, apis, server, algo = "charlie"):
         order = apis.alpacaApi.submit_order(symbol = self.ticker,
                          qty = self.posSize,
                          side = self.orderSide,
                          type = "market",
                          time_in_force = "day")
-        print("An order has been submitted for ", self.ticker, " qty: ", self.posSize)
+        print(algo,"An order has been submitted for ", self.ticker, " qty: ", self.posSize)
         self.orderID = order.id
-        self.updateTradeDb(action = "Initiated trade", initiated = True, apis = apis, algo = algo)
+        self.updateTradeDb(action = "Initiated trade", initiated = True, apis = apis, server = server, algo = algo)
         
         
     def cancelOrder(orderID, apis):
@@ -76,7 +76,7 @@ class Trade:
                          side = flattenSide,
                          type = "market",
                          time_in_force = "day")
-        print("An flatten order has been submitted for ", self.ticker, " qty: ", self.posSize)
+        print(algo,"An flatten order has been submitted for ", self.ticker, " qty: ", self.posSize)
         self.updateTradeDb(action = action, initiated = False, apis = apis, server = server, algo = algo)
 
     

@@ -23,8 +23,8 @@ def run_charlie(server, apis, active_trades, ema_time_period, maxPosSize, maxPos
     #Loop trough watchlist and check if the value has been crossed and fire trades.
     if (len(ma_watchlist) > 0):
         found_trades_long_ma, found_trades_short_ma = func.get_watchlist_price(ma_watchlist, "ma",apis, server)
-        succ_trades_long_ma = func.fire_orders(found_trades_long_ma, "buy", str(now),"20EMA", apis, maxPosSize, maxPosValue)
-        succ_trades_short_ma = func.fire_orders(found_trades_short_ma, "sell", str(now),"20EMA", apis, maxPosSize, maxPosValue)
+        succ_trades_long_ma = func.fire_orders(found_trades_long_ma, "buy", str(now),"20EMA", apis, server, maxPosSize, maxPosValue)
+        succ_trades_short_ma = func.fire_orders(found_trades_short_ma, "sell", str(now),"20EMA", apis, server, maxPosSize, maxPosValue)
     else:
         #If watchlist is empty, just create empty lists.
         found_trades_long_ma = []
@@ -34,7 +34,7 @@ def run_charlie(server, apis, active_trades, ema_time_period, maxPosSize, maxPos
         
     if (len(hd_watchlist) >0):
         found_trades_long_hd, found_trades_short_hd = func.get_watchlist_price(hd_watchlist,"hd", apis, server) #No short strades for the HD strategy should appear
-        succ_trades_long_hd = func.fire_orders(found_trades_long_hd, "buy", str(now),"H/D",apis, maxPosSize, maxPosValue)   
+        succ_trades_long_hd = func.fire_orders(found_trades_long_hd, "buy", str(now),"H/D",apis, server, maxPosSize, maxPosValue)   
     else:
         #If watchlist is empty, just create empty lists.
         found_trades_long_hd = []
@@ -42,9 +42,9 @@ def run_charlie(server, apis, active_trades, ema_time_period, maxPosSize, maxPos
         
     #Loop trough watchlist and check if the value has been crossed and fire trades.
     if (len(bb_watchlist) > 0):
-        found_trades_long_bb, found_trades_short_bb = func.get_watchlist_price(ma_watchlist, "bb", apis, server)
-        succ_trades_long_bb = func.fire_orders(found_trades_long_bb, "buy", str(now),"BB",apis, maxPosSize, maxPosValue)
-        succ_trades_short_bb = func.fire_orders(found_trades_short_bb, "sell", str(now),"BB",apis, maxPosSize, maxPosValue)
+        found_trades_long_bb, found_trades_short_bb = func.get_watchlist_price(bb_watchlist, "bb", apis, server)
+        succ_trades_long_bb = func.fire_orders(found_trades_long_bb, "buy", str(now),"BB",apis, server, maxPosSize, maxPosValue)
+        succ_trades_short_bb = func.fire_orders(found_trades_short_bb, "sell", str(now),"BB",apis, server, maxPosSize, maxPosValue)
     else:
         #If watchlist is empty, just create empty lists.
         found_trades_long_bb = []
@@ -63,7 +63,7 @@ def run_charlie(server, apis, active_trades, ema_time_period, maxPosSize, maxPos
     if (len(traded_stocks) > 0):
         ma_watchlist = ma_watchlist[~ma_watchlist.ticker.str.contains('|'.join(traded_stocks))]
         hd_watchlist = hd_watchlist[~hd_watchlist.ticker.str.contains('|'.join(traded_stocks))]
-        bb_watchlist = bb_watchlist[~hd_watchlist.ticker.str.contains('|'.join(traded_stocks))]
+        bb_watchlist = bb_watchlist[~bb_watchlist.ticker.str.contains('|'.join(traded_stocks))]
         #Update the db watchlist
         db.write_data_to_sql(pd.DataFrame(ma_watchlist),"ma_watchlist",server.serverSite)
         db.write_data_to_sql(pd.DataFrame(hd_watchlist),"hd_watchlist",server.serverSite)
