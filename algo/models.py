@@ -76,7 +76,7 @@ class Trade:
                          side = flattenSide,
                          type = "market",
                          time_in_force = "day")
-        print(algo,"An flatten order has been submitted for ", self.ticker, " qty: ", self.posSize)
+        print("Algo: ",algo +". An flatten order has been submitted for ", self.ticker, " qty: ", self.posSize)
         self.updateTradeDb(action = action, initiated = False, apis = apis, server = server, algo = algo)
 
     

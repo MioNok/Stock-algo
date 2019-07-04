@@ -29,7 +29,6 @@ def volatility_data(iexKey,avkey):
         lastFetchTime = datetime.utcnow()
     
     else:
-        print("else")
         vixLast = db.read_from_database("SELECT * from vixLast;",serverSite)
     
     # If the last baseline was fetched more than 6h ago, fetch new. Baseline is used to count the daily moving averages to detemine the market sentiment.
@@ -148,7 +147,6 @@ def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
         # Fetching the gappers and stocks close 52week highs and lows at 9:20 and write it to db for the front.
         if (clock.is_open == False and "09:15" in now):
             
-            print("Ding Ding Ding")
             
             #Get latest tickers and quotes
             tickers = db.read_from_database("Select distinct ticker from dailydata;", serverSite).dropna()
@@ -161,7 +159,7 @@ def scannermain(apikey, serverSite, startup, alpacaApi, avkey):
             print("Wrote highlows data to db")
             
             volatility_data(apikey,avkey)
-            print("Wrote volatility data data to db")
+            print("Wrote volatility data data to db. Time: ", now)
             
         time.sleep(30)
             
