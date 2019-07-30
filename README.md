@@ -5,4 +5,4 @@ Stock data, past/active trades and watchlistst will be stored in a cloud SQL dat
 
 To view the current progress of the front-end you can visit this link: **https://stockfront.appspot.com**.
 
-I also plan to backtest these trading strategies and then build MLPs to further evaluate each trades chance of success using several technical indicators. This will also be used to manage the risk of the porfolio. I have formatting the data for this but no no NN's have been made for this.
+I also plan to backtest these trading strategies and then build MLPs to further evaluate each trades chance of success using several technical indicators. This will also be used to manage the risk of the porfolio. I have formatted the data for this but no ML algos have been made for this.
