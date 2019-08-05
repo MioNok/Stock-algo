@@ -72,7 +72,7 @@ class Trade:
         self.setPosition(apis)
         
         apis.alpacaApi.submit_order(symbol = self.ticker,
-                         qty = self.posSize,
+                         qty = abs(self.posSize),
                          side = flattenSide,
                          type = "market",
                          time_in_force = "day")
