@@ -21,8 +21,7 @@ class APIs:
         self.alpacaApi = tradeapi.REST(
                        key_id = self.alpacaKey,
                        secret_key = self.alpacaSkey,
-                       base_url="https://paper-api.alpaca.markets"
-                       ) 
+                       base_url="https://paper-api.alpaca.markets") 
         
 class Trade:
     def __init__(self, ticker, posSize, orderSide, timeStamp, strategy):

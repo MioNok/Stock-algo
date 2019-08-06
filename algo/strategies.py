@@ -167,5 +167,10 @@ def week_cross(server, apis_delta, active_trades_delta):
 
     #Returns an list of lists with ticker, enrty price and strategy          
     return watchlist
+
+
+def rebalance_index():
+    #Rebalance index portfolio accoring to some metrics.. Used in echo
+    pass
             
             

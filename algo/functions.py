@@ -10,43 +10,54 @@ import talib
 
     #wl_code is the watchlist code that identifies to which wl should be updated.
 def get_watchlist_price(watchlist_df, wl_code, apis, server):
-     
-    watchlist_bars = apis.alpacaApi.get_barset(watchlist_df.ticker,'minute',limit = 1).df
-    
-    #The API that returns real time data is not perfect in my opinion. 
-    #It returns the last minute candle that the given tickes has traded, not neccecarliy the latest
-    #This has led me to do this wierd contraption where i fill the df's all NANs with the mean, and then I can just transpose it and take the first column
-    #Since all the rows contain the same values after the fill.na with mean. 
-    #You can set the start and end dates on the API call but I'm not sure if it supports minutes, since that is what I would be interested in.
-    #This should not have been a problem but it it was
+    #Working around the limitations of the API, one call can only contain 100 tickers
+    sumtickers = watchlist_df.shape[0]
+    index = 100
 
-    watchlist_bars = watchlist_bars.fillna(watchlist_bars.mean())
-    
-    #We only want the "close" values, this is the first way I could come up with. Surely there is better.
-    close_columns = [col for col in watchlist_bars.columns if "close" in col]
-     
-    close_values = watchlist_bars[close_columns].transpose().iloc[:,0]
-    
-    watchlist_df["current_price"] = list(close_values)
-    watchlist_df["price_difference"] = watchlist_df["price"]- watchlist_df["current_price"]
-    
-    #Update the db prices 
-    db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server.serverSite)
-    
+    #These lists will be populated and returned
     found_trades_long = []
     found_trades_short = []
+
+    while True:
+        watchlist_bars = apis.alpacaApi.get_barset(watchlist_df.ticker[index-100:index],'minute',limit = 1).df
     
-    longs = watchlist_df[watchlist_df["side"].str.match("buy")]
-    shorts = watchlist_df[watchlist_df["side"].str.match("sell")]
+        #The API that returns real time data is not perfect in my opinion. 
+        #It returns the last minute candle that the given tickes has traded, not neccecarliy the latest
+        #This has led me to do this wierd contraption where i fill the df's all NANs with the mean, and then I can just transpose it and take the first column
+        #Since all the rows contain the same values after the fill.na with mean. 
+         #You can set the start and end dates on the API call but I'm not sure if it supports minutes, since that is what I would be interested in.
+        #This should not have been a problem but it it was
+
+        watchlist_bars = watchlist_bars.fillna(watchlist_bars.mean())
     
-    for index, stock in longs.iterrows():
-        if (stock["price_difference"] < 0 ):
-            found_trades_long.append(stock["ticker"])
+        #We only want the "close" values, this is the first way I could come up with. Surely there are better ways.
+        close_columns = [col for col in watchlist_bars.columns if "close" in col]
+     
+        close_values = watchlist_bars[close_columns].transpose().iloc[:,0]
+    
+        watchlist_df["current_price"] = list(close_values)
+        watchlist_df["price_difference"] = watchlist_df["price"]- watchlist_df["current_price"]
+
+        #Update the db prices 
+        db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server.serverSite)
+    
+        longs = watchlist_df[watchlist_df["side"].str.match("buy")]
+        shorts = watchlist_df[watchlist_df["side"].str.match("sell")]
+    
+        for stock in longs.iterrows():
+            if (stock["price_difference"] < 0 ):
+                found_trades_long.append(stock["ticker"])
             
 
-    for index, stock in shorts.iterrows():
-        if (stock["price_difference"] > 0):
-            found_trades_short.append(stock["ticker"])
+        for stock in shorts.iterrows():
+            if (stock["price_difference"] > 0):
+                found_trades_short.append(stock["ticker"])
+
+        #If the number of symbols were less than 100, we break here. If not we will loop again and check again.
+        if index > sumtickers:
+            break
+
+        index = index + 100
 
     return found_trades_long, found_trades_short
 
