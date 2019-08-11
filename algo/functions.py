@@ -1,4 +1,5 @@
 #Functions for the algos
+from datetime import date
 import populate_database as db
 import time
 from models import Trade
@@ -19,6 +20,7 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
     found_trades_short = []
 
     while True:
+        watchlist_df_sliced = watchlist_df.iloc[index-100:index,:]
         watchlist_bars = apis.alpacaApi.get_barset(watchlist_df.ticker[index-100:index],'minute',limit = 1).df
     
         #The API that returns real time data is not perfect in my opinion. 
@@ -35,21 +37,27 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
      
         close_values = watchlist_bars[close_columns].transpose().iloc[:,0]
     
-        watchlist_df["current_price"] = list(close_values)
-        watchlist_df["price_difference"] = watchlist_df["price"]- watchlist_df["current_price"]
+        watchlist_df_sliced["current_price"] = list(close_values)
+        watchlist_df_sliced["price_difference"] = watchlist_df_sliced["price"]- watchlist_df_sliced["current_price"]
 
-        #Update the db prices 
-        db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server.serverSite)
+        #Update the db prices
+        #If the tickers are more than 100, we are going to append items to the watchlist db and not replace. 
+        fate = "replace"
+
+        if sumtickers > 100:
+            fate = "append"
+
+        db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server = server.serverSite, if_exists = fate )
     
-        longs = watchlist_df[watchlist_df["side"].str.match("buy")]
-        shorts = watchlist_df[watchlist_df["side"].str.match("sell")]
+        longs = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("buy")]
+        shorts = watchlist_df[watchlist_df_sliced["side"].str.match("sell")]
     
-        for stock in longs.iterrows():
+        for index, stock in longs.iterrows():
             if (stock["price_difference"] < 0 ):
                 found_trades_long.append(stock["ticker"])
             
 
-        for stock in shorts.iterrows():
+        for index,stock in shorts.iterrows():
             if (stock["price_difference"] > 0):
                 found_trades_short.append(stock["ticker"])
 
@@ -175,6 +183,15 @@ def active_trades_to_db(active_trades, serverSite, table_name ="active_trades"):
     active_trade_df = pd.DataFrame(active_trade_lists, columns = colnames)
     db.write_data_to_sql(active_trade_df,table_name, serverSite)
 
+
+
+def portfolio_value_to_db(apis,serverSite,code):
+    #Fetch the current portfolio values and store in db. Code is used to differentiate the apis
+    today = date.today()
+    time = today.strftime("%d/%m/%Y")
+    portvalue = apis.get_account().portfolio_value
+    df = pd.DataFrame({"code": [code], "portval":[portvalue], "timestamp":[time]})
+    db.write_data_to_sql(df,"portvalues",serverSite, if_exists = "append")
     
             
             

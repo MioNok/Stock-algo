@@ -177,7 +177,7 @@ def db_main(server, apis, timeframe):
     
     #Db functions
     fiscStockData = getSnP500data() 
-    write_data_to_sql(fiscStockData, "fiscdata", serverSite = server.serverSite, if_exists = "replace",  )
+    write_data_to_sql(fiscStockData, "fiscdata", serverSite = server.serverSite, if_exists = "replace"  )
     
     #Get the tickers.
     snpTickers = read_snp_tickers(server.serverSite)

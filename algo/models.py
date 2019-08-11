@@ -52,7 +52,7 @@ class Trade:
         self.updateTradeDb(action = "Initiated trade", initiated = True, apis = apis, server = server, algo = algo)
         
         
-    def cancelOrder(orderID, apis):
+    def cancelOrder(self, orderID, apis):
         apis.alpacaApi.cancel_orderorder(orderID)
         
     def setStopPrice(self,stopPrice):
@@ -71,7 +71,7 @@ class Trade:
         self.setPosition(apis)
         
         apis.alpacaApi.submit_order(symbol = self.ticker,
-                         qty = abs(self.posSize),
+                         qty = abs(int(self.posSize)),
                          side = flattenSide,
                          type = "market",
                          time_in_force = "day")

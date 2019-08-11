@@ -8,11 +8,13 @@ import argparse
 from populate_database import db_main
 import populate_database as db
 import strategies as strategies
+import functions as func
 from models import Server, APIs, Trade
 
 #algos
 import charlie
 import delta
+#import echo
 
 #Can edit if needed.
 sleepBetweenCalls = 10
@@ -70,7 +72,7 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
         #I have had instaces when the API has been unreachable.
         try:
             clock = apis.alpacaApi.get_clock()
-            now = str(clock.timestamp)[0:19] #Get only current date an time.
+            now = str(clock.timestamp)[0:19] #Get only current date and time.
         except:
             print("Could not fetch clock")
         
@@ -116,6 +118,11 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
             print("Market open!")
             time.sleep(900) #Sleep for the first 15 min to avoid the larget market volatility
             
+            #Fetch portfolio values to db
+            func.portfolio_value_to_db(apis, serverSite, "Charlie")
+            func.portfolio_value_to_db(apis_delta, serverSite, "Delta")
+            #func.portfolio_value_to_db(apis_echo,"Echo")
+
             while apis.alpacaApi.get_clock().is_open:
                 try:
                     clock = apis.alpacaApi.get_clock()
