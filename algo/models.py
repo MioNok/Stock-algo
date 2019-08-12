@@ -47,7 +47,7 @@ class Trade:
                          side = self.orderSide,
                          type = "market",
                          time_in_force = "day")
-        print(algo,"An order has been submitted for ", self.ticker, " qty: ", self.posSize)
+        print("An",algo, "order has been submitted for ", self.ticker, " qty: ", self.posSize, "side: ", self.orderSide)
         self.orderID = order.id
         self.updateTradeDb(action = "Initiated trade", initiated = True, apis = apis, server = server, algo = algo)
         
@@ -62,21 +62,26 @@ class Trade:
         self.last15MinCandle = candle
         
     def flattenOrder(self, action, apis, server, algo = "charlie"):
-        flattenSide = ""
-        if (self.orderSide == "buy"):
-            flattenSide = "sell"
-        else: flattenSide == "buy"
+        flattenSide = "sell"
+        if (self.orderSide == "sell"):
+            flattenSide = "buy"
+
         
         #Save current trade specs.
         self.setPosition(apis)
-        
-        apis.alpacaApi.submit_order(symbol = self.ticker,
+
+        try:
+            apis.alpacaApi.submit_order(symbol = self.ticker,
                          qty = abs(int(self.posSize)),
                          side = flattenSide,
                          type = "market",
                          time_in_force = "day")
-        print("Algo: ",algo +". An flatten order has been submitted for ", self.ticker, " qty: ", self.posSize)
-        self.updateTradeDb(action = action, initiated = False, apis = apis, server = server, algo = algo)
+            print("Algo: ",algo +". An flatten order has been submitted for ", self.ticker, " qty: ", self.posSize)
+            self.updateTradeDb(action = action, initiated = False, apis = apis, server = server, algo = algo)
+
+        except:
+            print("Failed to flatten order, ticker: "+self.ticker)
+        
 
     
     def setPosition(self, apis):
