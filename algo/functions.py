@@ -44,10 +44,10 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
         #If the tickers are more than 100, we are going to append items to the watchlist db and not replace. 
         fate = "replace"
 
-        if sumtickers > 100:
+        if index > sumtickers:
             fate = "append"
 
-        db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server.serverSite, fate )
+        db.write_data_to_sql(watchlist_df_sliced,wl_code+"_watchlist", server.serverSite, fate )
     
         try:
             print("Longs ding")
@@ -61,7 +61,7 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
 
         try:
             print("Shorts ding")
-            shorts = watchlist_df[watchlist_df_sliced["side"].str.match("sell")]
+            shorts = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("sell")]
             for index,stock in shorts.iterrows():
                 if (stock["price_difference"] > 0):
                     found_trades_short.append(stock["ticker"])
