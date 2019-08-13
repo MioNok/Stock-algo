@@ -37,36 +37,30 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
      
         close_values = watchlist_bars[close_columns].transpose().iloc[:,0]
     
-        watchlist_df_sliced["current_price"] = list(close_values)
-        watchlist_df_sliced["price_difference"] = watchlist_df_sliced["price"]- watchlist_df_sliced["current_price"]
+        watchlist_df_sliced.insert(4,"current_price",list(close_values), True)
+        price_difference = watchlist_df_sliced["price"]- watchlist_df_sliced["current_price"]
+        watchlist_df_sliced.insert(5,"price_difference",list(price_difference), True)
 
         #Update the db prices
         #If the tickers are more than 100, we are going to append items to the watchlist db and not replace. 
         fate = "replace"
 
-        if index > sumtickers:
+        if sumtickers > index:
             fate = "append"
 
         db.write_data_to_sql(watchlist_df_sliced,wl_code+"_watchlist", server.serverSite, fate )
     
-        try:
-            print("Longs ding")
-            longs = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("buy")]
-            for index, stock in longs.iterrows():
-              if (stock["price_difference"] < 0 ):
-                  found_trades_long.append(stock["ticker"])
-        except:
-            print("Long fail")
-        
+        longs = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("buy")]
+        for element, stock in longs.iterrows():
+            if (stock["price_difference"] < 0 ):
+                found_trades_long.append(stock["ticker"])
 
-        try:
-            print("Shorts ding")
-            shorts = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("sell")]
-            for index,stock in shorts.iterrows():
-                if (stock["price_difference"] > 0):
-                    found_trades_short.append(stock["ticker"])
-        except:
-            print("Short fail")
+        
+        shorts = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("sell")]
+        for element,stock in shorts.iterrows():
+            if (stock["price_difference"] > 0):
+                found_trades_short.append(stock["ticker"])
+
 
         #If the number of symbols were less than 100, we break here. If not we will loop again and check again.
         if index > sumtickers:
@@ -125,7 +119,7 @@ def check_stoploss(current_trades,ema_time_period, server,apis, algo = "charlie"
     #Find stop prices for the trades.
     for trade in current_trades:
         if (trade.stopPrice == 0) :
-            data = db.read_from_database("Select date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ trade.ticker+ "' ORDER BY date DESC limit "+str(ema_time_period+10)+";",server.serverSite)
+            data = db.read_from_database("Select distinct date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ trade.ticker+ "' ORDER BY date DESC limit "+str(ema_time_period+10)+";",server.serverSite)
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]

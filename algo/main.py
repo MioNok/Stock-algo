@@ -82,7 +82,7 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
             latest_data_from_db = db.read_from_database("SELECT date FROM dailydata ORDER BY date DESC limit 1;", server.serverSite).iloc[0,0]
             latest_data_from_api = db.get_iex_data(["AAPL"],timeframe = "previous", apikey = apis.iexKey).iloc[0,0] #Testing what the latest data for aapl is, any ticker will do.
             #If there is new data, which is true every day except weekends and if the market was closed -> fetch previous days data.
-            if (latest_data_from_db != latest_data_from_api):
+            if latest_data_from_db != latest_data_from_api:
                 #Fetch more data
                 print("updating databse with latest data")
                 db_main(server, apis, timeframe = "previous")

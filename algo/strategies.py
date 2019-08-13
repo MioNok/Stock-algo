@@ -18,7 +18,7 @@ def ma_crossover(ma, time_period, server):
     for ticker in tickers:
                 
         try:
-            data = db.read_from_database("Select date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit "+str(time_period+100)+";", server.serverSite)
+            data = db.read_from_database("Select distinct date, ticker, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit "+str(time_period+100)+";", server.serverSite)
             
             #Talib need the oldest data to be first     
             data = data.iloc[::-1]
@@ -56,7 +56,7 @@ def hammer_doji(server):
         
         try:
             #Get the latest data only
-            data = db.read_from_database("Select date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 1;",server.serverSite)
+            data = db.read_from_database("Select distinct date, ticker,uOpen, uHigh, uLow, uClose from dailydata where ticker ='"+ ticker+"' ORDER BY date DESC limit 1;",server.serverSite)
             
             
             data["dojidf"] = talib.CDLDRAGONFLYDOJI(data.uOpen, data.uHigh, data.uLow, data.uClose)
