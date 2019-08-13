@@ -47,19 +47,26 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
         if sumtickers > 100:
             fate = "append"
 
-        db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server = server.serverSite, if_exists = fate )
+        db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server.serverSite, fate )
     
-        longs = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("buy")]
-        shorts = watchlist_df[watchlist_df_sliced["side"].str.match("sell")]
-    
-        for index, stock in longs.iterrows():
-            if (stock["price_difference"] < 0 ):
-                found_trades_long.append(stock["ticker"])
-            
+        try:
+            print("Longs ding")
+            longs = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("buy")]
+            for index, stock in longs.iterrows():
+              if (stock["price_difference"] < 0 ):
+                  found_trades_long.append(stock["ticker"])
+        except:
+            print("Long fail")
+        
 
-        for index,stock in shorts.iterrows():
-            if (stock["price_difference"] > 0):
-                found_trades_short.append(stock["ticker"])
+        try:
+            print("Shorts ding")
+            shorts = watchlist_df[watchlist_df_sliced["side"].str.match("sell")]
+            for index,stock in shorts.iterrows():
+                if (stock["price_difference"] > 0):
+                    found_trades_short.append(stock["ticker"])
+        except:
+            print("Short fail")
 
         #If the number of symbols were less than 100, we break here. If not we will loop again and check again.
         if index > sumtickers:
@@ -189,7 +196,7 @@ def portfolio_value_to_db(apis,serverSite,code):
     #Fetch the current portfolio values and store in db. Code is used to differentiate the apis
     today = date.today()
     time = today.strftime("%d/%m/%Y")
-    portvalue = apis.get_account().portfolio_value
+    portvalue = apis.alpacaApi.get_account().portfolio_value
     df = pd.DataFrame({"code": [code], "portval":[portvalue], "timestamp":[time]})
     db.write_data_to_sql(df,"portvalues",serverSite, if_exists = "append")
     

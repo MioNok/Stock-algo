@@ -119,9 +119,9 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
             time.sleep(900) #Sleep for the first 15 min to avoid the larget market volatility
             
             #Fetch portfolio values to db
-            func.portfolio_value_to_db(apis, serverSite, "Charlie")
-            func.portfolio_value_to_db(apis_delta, serverSite, "Delta")
-            #func.portfolio_value_to_db(apis_echo,"Echo")
+            func.portfolio_value_to_db(apis, server.serverSite, "Charlie")
+            func.portfolio_value_to_db(apis_delta, server.serverSite, "Delta")
+            #func.portfolio_value_to_db(apis_echo, server.serverSite,"Echo")
 
             while apis.alpacaApi.get_clock().is_open:
                 try:
