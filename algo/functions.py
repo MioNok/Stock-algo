@@ -9,8 +9,9 @@ import talib
 
 
 
-    #wl_code is the watchlist code that identifies to which wl should be updated.
-def get_watchlist_price(watchlist_df, wl_code, apis, server):
+    
+#Currently broken.. reverting to old version. This is not used for now.
+def get_watchlist_price_broken(watchlist_df, wl_code, apis, server):
     #Working around the limitations of the API, one call can only contain 100 tickers
     sumtickers = watchlist_df.shape[0]
     index = 100
@@ -54,6 +55,7 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
         for element, stock in longs.iterrows():
             if (stock["price_difference"] < 0 ):
                 found_trades_long.append(stock["ticker"])
+                print("Trade , Long", stock["ticker"], stock["side"], stock["price"], stock["current_price"] )
 
         
         shorts = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("sell")]
@@ -67,6 +69,49 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
             break
 
         index = index + 100
+
+    return found_trades_long, found_trades_short
+
+def get_watchlist_price(watchlist_df, wl_code, apis, server):
+     
+    watchlist_bars = apis.alpacaApi.get_barset(watchlist_df.ticker,'minute',limit = 1).df
+    
+    #The API that returns real time data is not perfect in my opinion. 
+    #It returns the last minute candle that the given tickes has traded, not neccecarliy the latest
+    #This has led me to do this wierd contraption where i fill the df's all NANs with the mean, and then I can just transpose it and take the first column
+    #Since all the rows contain the same values after the fill.na with mean. 
+    #You can set the start and end dates on the API call but I'm not sure if it supports minutes, since that is what I would be interested in.
+    #This should not have been a problem but it it was
+
+    watchlist_bars = watchlist_bars.fillna(watchlist_bars.mean())
+    
+    #We only want the "close" values, this is the first way I could come up with. Surely there is better.
+    close_columns = [col for col in watchlist_bars.columns if "close" in col]
+     
+    close_values = watchlist_bars[close_columns].transpose().iloc[:,0]
+    
+    watchlist_df["current_price"] = list(close_values)
+    watchlist_df["price_difference"] = watchlist_df["price"]- watchlist_df["current_price"]
+    
+    #Update the db prices 
+    db.write_data_to_sql(pd.DataFrame(watchlist_df),wl_code+"_watchlist", server.serverSite)
+    
+    found_trades_long = []
+    found_trades_short = []
+    
+    longs = watchlist_df[watchlist_df["side"].str.match("buy")]
+    shorts = watchlist_df[watchlist_df["side"].str.match("sell")]
+    
+    for index, stock in longs.iterrows():
+        if (stock["price_difference"] < 0 ):
+            found_trades_long.append(stock["ticker"])
+            print("Trade , Long", stock["ticker"], stock["side"], stock["price"], stock["current_price"] )
+            
+
+    for index, stock in shorts.iterrows():
+        if (stock["price_difference"] > 0):
+            found_trades_short.append(stock["ticker"])
+            print("Trade , Short", stock["ticker"], stock["side"], stock["price"], stock["current_price"] )
 
     return found_trades_long, found_trades_short
 
@@ -127,7 +172,7 @@ def check_stoploss(current_trades,ema_time_period, server,apis, algo = "charlie"
             #Setting the stop price to the 20EMA
             data["stop_price"] = talib.EMA(data.uClose, timeperiod = ema_time_period)
             trade.setStopPrice(data.stop_price[0])
-            print("Stop price for ", trade.ticker," is set to ", trade.stopPrice)
+            print("Stop price for ", trade.ticker," is set to ", trade.stopPrice, "entry:", trade.entryPrice )
         else:
             #Get the close price of the last 5 minute candle and comapre it against the stop price
             #If the 5min candle has closed above the stop price, it will flatten the trade.
@@ -149,7 +194,7 @@ def check_target(current_trades,apis, server, algo = "charlie"):
         if (trade.targetPrice  == 0):
             
             #update the current position info, sleep for a while so that the orders have time get filled.
-            time.sleep(5)
+            time.sleep(3)
             trade.setPosition(apis)
             
             if(trade.orderSide == "buy"):
@@ -157,7 +202,7 @@ def check_target(current_trades,apis, server, algo = "charlie"):
             else:
                 trade.targetPrice = trade.entryPrice - ((trade.stopPrice - trade.entryPrice)*2)
             
-            print("Target price for ", trade.ticker," is set to ", trade.targetPrice)
+            print("Target price for ", trade.ticker," is set to ", trade.targetPrice,  "entry:", trade.entryPrice, "stop:", trade.stopPrice, "order side", trade.orderSide)
         else:
             #Close the trade if the 1min candle high has hit the target
             current_trade_price = trade.last15MinCandle.iloc[0,1]
@@ -165,9 +210,11 @@ def check_target(current_trades,apis, server, algo = "charlie"):
             if (current_trade_price_low < trade.targetPrice and trade.orderSide == "sell"):
                 trade.flattenOrder(action = "Target",apis = apis,server = server, algo = algo)
                 current_trades.remove(trade)
+                print("Side sell", "Current trade price (15 min candle high?",current_trade_price, "and low", current_trade_price_low)
             if (current_trade_price > trade.targetPrice and trade.orderSide == "buy"):
                 trade.flattenOrder(action = "Target", apis = apis, server = server, algo = algo)
                 current_trades.remove(trade)
+                print("Side Buy","Current trade price (15 min candle high?",current_trade_price, "and low", current_trade_price_low)
     
     return current_trades
 
