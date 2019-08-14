@@ -37,6 +37,7 @@ def get_watchlist_price_broken(watchlist_df, wl_code, apis, server):
         close_columns = [col for col in watchlist_bars.columns if "close" in col]
      
         close_values = watchlist_bars[close_columns].transpose().iloc[:,0]
+        close_values.sort_index()
     
         watchlist_df_sliced.insert(4,"current_price",list(close_values), True)
         price_difference = watchlist_df_sliced["price"]- watchlist_df_sliced["current_price"]
@@ -89,6 +90,7 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
     close_columns = [col for col in watchlist_bars.columns if "close" in col]
      
     close_values = watchlist_bars[close_columns].transpose().iloc[:,0]
+    close_values.sort_index()
     
     watchlist_df["current_price"] = list(close_values)
     watchlist_df["price_difference"] = watchlist_df["price"]- watchlist_df["current_price"]
