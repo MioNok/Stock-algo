@@ -45,7 +45,7 @@ def get_active_trades(apis):
 
     
         
-def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosValue, apis_delta):
+def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosValue, apis_delta, apis_echo):
     
     ema_time_period = 20
     
@@ -121,7 +121,10 @@ def main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosV
             #Fetch portfolio values to db
             func.portfolio_value_to_db(apis, server.serverSite, "Charlie")
             func.portfolio_value_to_db(apis_delta, server.serverSite, "Delta")
-            #func.portfolio_value_to_db(apis_echo, server.serverSite,"Echo")
+            func.portfolio_value_to_db(apis_echo, server.serverSite,"Echo")
+
+            #Echo should be only run once a day so running if at the start of the day.
+            echo.run_echo(server,apis_echo,now)
 
             while apis.alpacaApi.get_clock().is_open:
                 try:
@@ -159,8 +162,10 @@ def parseargs():
     parser.add_argument("-db","--database", help= "the name of your database",required = True, type = str)
     parser.add_argument("-ak","--alpacaKey", help= "alpaca api key", required = True, type = str)
     parser.add_argument("-ask","--alpacaSKey", help= "alpaca secret api key", required = True, type = str)
-    parser.add_argument("-akd","--alpacaKeydelta", help= "alpaca api key", required = True, type = str)
-    parser.add_argument("-askd","--alpacaSKeydelta", help= "alpaca secret api key", required = True, type = str)
+    parser.add_argument("-akd","--alpacaKeydelta", help= "alpaca api key delta", required = True, type = str)
+    parser.add_argument("-askd","--alpacaSKeydelta", help= "alpaca secret api key delta", required = True, type = str)
+    parser.add_argument("-ake","--alpacaKeyecho", help= "alpaca api key echo", required = True, type = str)
+    parser.add_argument("-aske","--alpacaSKeyecho", help= "alpaca secret api key echo", required = True, type = str)
     parser.add_argument("-ik","--iexKey", help= "Iex api key", required = True, type = str)
     
     #Optional 
@@ -182,6 +187,8 @@ def parseargs():
     alpacaSKey = args.alpacaSKey
     alpacaKeydelta = args.alpacaKeydelta
     alpacaSKeydelta = args.alpacaSKeydelta
+    alpacaKeyecho = args.alpacaKeyecho
+    alpacaSKeyecho = args.alpacaSKeyecho
     iexKey = args.iexKey
     
     #Position variables
@@ -194,15 +201,16 @@ def parseargs():
     #important classes
     server = Server(user = serverUser, password = serverPass, address = serverAddress, database = database)
     apis = APIs(alpacaKey, alpacaSKey, iexKey)
-    apis_delta = APIs(alpacaKeydelta, alpacaSKeydelta, iexKey)   
+    apis_delta = APIs(alpacaKeydelta, alpacaSKeydelta, iexKey)
+    apis_echo = APIs(alpacaKeyecho, alpacaSKeyecho, iexKey)   
 
     
-    return apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosValue, apis_delta
+    return apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosValue, apis_delta, apis_echo
     
 
 if __name__ == "__main__":
-    apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosValue, apis_delta = parseargs()
-    main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosValue, apis_delta)
+    apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosValue, apis_delta, apis_echo = parseargs()
+    main(apis, server, startup, startupPrevious, watchlists, maxPosSize, maxPosValue, apis_delta, apis_echo)
     
 
 

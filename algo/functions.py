@@ -149,10 +149,21 @@ def fire_orders(trades, side, now, strategy, apis, server, maxPosSize, maxPosVal
             print("Trade failed for ",trade)
     return succesful_trades
 
-
-
-def current_active_trade_prices(current_trades, apis):
+#Only used for echo. better version of the one above.
+def fire_etf_orders(trades_df, side, now, strategy, apis, server, algo = "echo"):
     
+    for trades in trades_df.iterrows():
+        try:
+            live_trade = Trade(trades[1].symbol, trades[1].posdifference, side, now, strategy)
+            
+            live_trade.submitOrder(apis,server, algo = algo)
+        except:
+            print("Trade failed for", trades[1].symbol)
+            
+
+
+
+def current_active_trade_prices(current_trades, apis):   
     #Get the latest 15min candle. Future trade decisions is made on the OHLC on it.
     for trade in current_trades:
         current_candle = apis.alpacaApi.get_barset(trade.ticker,"15Min",limit = 1).df
@@ -243,6 +254,22 @@ def portfolio_value_to_db(apis,serverSite,code):
     df = pd.DataFrame({"code": [code], "portval":[portvalue], "timestamp":[time]})
     db.write_data_to_sql(df,"portvalues",serverSite, if_exists = "append")
     
+def echo_active_trades_to_db(apis,serverSite): 
+    
+    current_portfolio = apis.alpacaApi.list_positions()
+    
+    current_port_list = []
+    for position in current_portfolio:
+        current_port_list.append([position.symbol, 
+                                  position.current_price, 
+                                  position.lastday_price,
+                                  position.qty,
+                                  position.unrealized_plpc])
+        
+    colnames = ["ticker","current_price","lastday_price","qty","unreal_pl"]
+    current_port_df = pd.DataFrame(current_port_list, columns= colnames)
+    
+    write_data_to_sql(current_port_df, "active_trades_echo", serverSite, if_exists = "replace")
             
             
 

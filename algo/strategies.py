@@ -4,6 +4,7 @@
 import talib
 import populate_database as db
 import pandas as pd
+from datetime import date
 
 
 def ma_crossover(ma, time_period, server):
@@ -169,8 +170,115 @@ def week_cross(server, apis_delta, active_trades_delta):
     return watchlist
 
 
-def rebalance_index():
+
+#techical analysis of the eft data
+def etf_ta(etf_data):
+    universe = ["SPY","EEM","GDX","XLF","QQQ","FXI","EFA","IWM","IAU","XLI","XLV","RSX","IYR","INDA","VGK"]
+    
+    #points contains the final results from this simple techical analysis. This will be used to reevaluate the portfolio position sizes.
+    points = []
+    
+    for item in universe:
+        symboldata = etf_data[etf_data.ticker == item]
+        #Talib need the oldest data to be first    
+        symboldata = symboldata.iloc[::-1]
+        
+        #Using some technical indicators to determine its strength/weekness.
+        symboldata["SMA5"] = talib.SMA(symboldata.uClose, timeperiod=5)
+        symboldata["SMA10"] = talib.SMA(symboldata.uClose, timeperiod=10)
+        symboldata["SMA20"] = talib.SMA(symboldata.uClose, timeperiod=20)
+        symboldata["SMA50"] = talib.SMA(symboldata.uClose, timeperiod=50)
+        symboldata["SMA100"] = talib.SMA(symboldata.uClose, timeperiod=100)
+        symboldata["SMA200"] = talib.SMA(symboldata.uClose, timeperiod=200)
+        
+        symboldata["EMA5"] = talib.EMA(symboldata.uClose, timeperiod=5)
+        symboldata["EMA10"] = talib.EMA(symboldata.uClose, timeperiod=10)
+        symboldata["EMA20"] = talib.EMA(symboldata.uClose, timeperiod=20)
+        symboldata["EMA50"] = talib.EMA(symboldata.uClose, timeperiod=50)
+        symboldata["EMA100"] = talib.EMA(symboldata.uClose, timeperiod=100)
+        symboldata["EMA200"] = talib.EMA(symboldata.uClose, timeperiod=200)
+        
+        symboldata["MACD"], symboldata["macdsignal"], symboldata["macdhist"] = talib.MACD(symboldata.uClose, fastperiod=12, slowperiod=26, signalperiod=9)
+        symboldata["RSI"] = talib.RSI(symboldata.uClose, timeperiod = 14)
+        
+        #Comparing the movingaverages to the last close.
+        movingaverages = pd.DataFrame(columns= ["madata","last_close","result"])
+        movingaverages.madata = symboldata.iloc[-1,6:18]
+        movingaverages.last_close = symboldata.iloc[-1,4]
+        movingaverages.result= movingaverages.madata < movingaverages.last_close
+        ma_points = sum(movingaverages.result) # out of 12
+        
+        #Comparing the momentum indicators to the last close.
+        #RSI
+        #Buying when its weak. Reducing size if its really strong.
+        if symboldata.iloc[-1,21] < 30:
+            mom_points = +2
+        elif symboldata.iloc[-1,21] > 70:
+            mom_points = -2
+        else:
+            mom_points= 0
+            
+        #MACD
+        if symboldata.iloc[-1, 18] > 0:
+            mom_points += 1
+        else:
+            mom_points -= 1
+            
+        sum_points = ma_points + mom_points
+        points.append([item,sum_points, movingaverages.last_close[0]])
+        points_df = pd.DataFrame(points, columns = ["symbol","points", "last_close"]).sort_values(by ="points", ascending = False)
+        
+    
+    return points_df
+
+
+def rebalance_index_positions(apis, server):
     #Rebalance index portfolio accoring to some metrics.. Used in echo
-    pass
+    #I have created an diverse universe of different ETFs that should cover a wide range of markets and commodities.
+    #This is a better way of looking up the data, all at once instead of multiple SQL calls. TODO: update charlies datafetch strategies.
+
+    today = date.today()
+    #only fetching data that is one year old or newer.
+    last_date = date(today.year -1 , today.month, today.day)
+    #today_date = today.strftime("%Y-%m-%d")
+    string_date  = last_date.strftime("%Y-%m-%d")
+
+    #Get all the data
+    etf_data = db.read_from_database("Select distinct date, ticker, uHigh, uLow, uClose, uVolume from etfdata where date >'"+ string_date+"' ORDER BY date DESC;", server.serverSite)
+
+    points_df = etf_ta(etf_data)
+    current_port_value = float(apis.alpacaApi.get_account().portfolio_value)
+
+    #Calculate how much of the portfolio should be weighted for the etf in question.
+    points_df["etfweight"] = points_df.points / sum(points_df.points)
+    #Calculate how many shares I should have at the start of the day.
+    points_df["sumshares"] = ((current_port_value * points_df.etfweight) / points_df.last_close).astype(int)
+
+    current_port_balance = apis.alpacaApi.list_positions()
+
+    #If there are current positions, compare the difference is weighting if not buy the whole lot.
+    if len(current_port_balance) >0:
+        
+        current_bal = []
+        for pos in current_port_balance:
+            current_bal.append([pos.symbol,pos.qty, pos.side])
+            
+        current_bal_df = pd.DataFrame(current_bal, columns = ["symbol","qty","side"])
+        
+        merged_df = current_bal_df.merge(points_df, left_on = "symbol", right_on = "symbol")
+        merged_df["posdifference"] = merged_df.sumshares - merged_df.qty
+        
+         
+    else:
+        merged_df = points_df[["symbol","sumshares"]]
+        merged_df.columns = ["symbol","posdifference"]
+
+    merged_df = merged_df[["symbol","posdifference"]]
+        
+    return merged_df
+
+
+
+
             
             

@@ -75,6 +75,9 @@ def get_iex_data(tickers, timeframe, apikey):
         if (timeframe == "3m"):
             stock_data = pd.read_json("https://cloud.iexapis.com/beta/stock/market/batch?symbols="+str_tickers+"&types=chart&range=3m&token="+apikey)
         
+        if (timeframe == "1y"):
+            stock_data = pd.read_json("https://cloud.iexapis.com/stable/stock/market/batch?symbols="+str_tickers+"&types=chart&range=1y&token="+apikey)
+        
         elif(timeframe == "previous"): 
             stock_data = pd.read_json("https://cloud.iexapis.com/beta/stock/market/batch?symbols="+str_tickers+"&types=previous&token="+apikey)
         
@@ -87,6 +90,10 @@ def get_iex_data(tickers, timeframe, apikey):
         for key, element in stock_data.iterrows():
             
             if (timeframe == "3m"):
+                stock_data_temp = pd.DataFrame(element[0])
+                stock_data_temp["ticker"] = element.name
+                
+            elif (timeframe == "1y"):
                 stock_data_temp = pd.DataFrame(element[0])
                 stock_data_temp["ticker"] = element.name
             
@@ -104,7 +111,6 @@ def get_iex_data(tickers, timeframe, apikey):
     #Dropping column "0" that is generated from the to_frame and transpose.    
     #stock_data_final = stock_data_final.drop(stock_data_final.columns[0], axis=1) 
     return stock_data_final 
-
 
 def get_iex_quotes(tickers, apikey):
     
@@ -173,18 +179,34 @@ def read_from_database(query, serverSite):
 #When lauching the db for the first time the timeframe should be 1m, it drops the old tables and creates new one whit new data.
 #Afterwards timeframe should be set to "previous". This meand that only the latets data is fetched and appended to the database.
 def db_main(server, apis, timeframe):
-    
-    
+       
     #Db functions
     fiscStockData = getSnP500data() 
     write_data_to_sql(fiscStockData, "fiscdata", serverSite = server.serverSite, if_exists = "replace"  )
     
-    #Get the tickers.
+    #Get the tickers for charlie and delta, echos tickers are preset.
     snpTickers = read_snp_tickers(server.serverSite)
-
+    #I have created an diverse universe of different ETFs that should cover a wide range of mrkets and commodities.
+    universe = ["SPY","EEM","GDX","XLF","QQQ","FXI","EFA","IWM","IAU","XLI","XLV","RSX","IYR","INDA","VGK"]
+    
     #stockdata = read_data_daily_alpaca(snpTickers.Symbol)
     stockdata = get_iex_data(snpTickers.Symbol, timeframe = timeframe, apikey = apis.iexKey)
+
+
+    #For echo#
+    #If timeframe is set to "3m", also fetch the 1y data for the etfs. 
+    if (timeframe == "3m"):
+        stockdata_etf = get_iex_data(universe, timeframe = "1y", apikey = apis.iexKey)
+        write_data_to_sql(stockdata_etf, "etfdata",serverSite = server.serverSite, if_exists = "replace" )
+    elif(timeframe =="previous"):
+        stockdata_etf = get_iex_data(universe, timeframe = "previous", apikey = apis.iexKey)
+        stockdata_etf.drop( "change", axis = 1, inplace = True)
+        stockdata_etf.drop( 0 , axis = 1, inplace = True)
+        write_data_to_sql(stockdata, "etfdata",serverSite = server.serverSite, if_exists = "append" )
+
+        
     
+    #For delta and charlie#
     #If the timeframe is 3m that means that completely new data is brought and repleace it with the old, in other cases just get the latest data and append it.
     if (timeframe == "3m"):
         write_data_to_sql(stockdata, "dailydata",serverSite = server.serverSite, if_exists = "replace" )

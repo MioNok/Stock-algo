@@ -49,7 +49,10 @@ class Trade:
                          time_in_force = "day")
         print("An",algo, "order has been submitted for ", self.ticker, " qty: ", self.posSize, "side: ", self.orderSide)
         self.orderID = order.id
-        self.updateTradeDb(action = "Initiated trade", initiated = True, apis = apis, server = server, algo = algo)
+        if algo == "echo":
+            self.updateTradeDb(action = "Rebalanced", initiated = True, apis = apis, server = server, algo = algo)
+        else:
+            self.updateTradeDb(action = "Initiated trade", initiated = True, apis = apis, server = server, algo = algo)
         
         
     def cancelOrder(self, orderID, apis):
@@ -65,8 +68,7 @@ class Trade:
         flattenSide = "sell"
         if (self.orderSide == "sell"):
             flattenSide = "buy"
-
-        
+     
         #Save current trade specs.
         self.setPosition(apis)
 
@@ -120,6 +122,8 @@ class Trade:
             db.write_data_to_sql(tradedb,"tradehistory",if_exists = "append", serverSite = server.serverSite)
         elif algo == "delta":
             db.write_data_to_sql(tradedb,"tradehistory_delta",if_exists = "append", serverSite = server.serverSite)
+        elif algo == "echo":
+            db.write_data_to_sql(tradedb,"tradehistory_echo",if_exists = "append", serverSite = server.serverSite)
             
         
         
