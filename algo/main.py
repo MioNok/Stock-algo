@@ -39,6 +39,9 @@ def get_active_trades(apis):
                           timeStamp = "old",
                           strategy = "unknown")
         
+        old_trade.entryPrice = pos.avg_entry_price
+        old_trade.unrealPL = pos.unrealized_pl
+        
         active_trades.append(old_trade)
     
     return active_trades 

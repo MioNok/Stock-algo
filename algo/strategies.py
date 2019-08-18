@@ -180,7 +180,7 @@ def etf_ta(etf_data):
     
     for item in universe:
         symboldata = etf_data[etf_data.ticker == item]
-        #Talib need the oldest data to be first    
+        #Talib needs the oldest data to be first    
         symboldata = symboldata.iloc[::-1]
         
         #Using some technical indicators to determine its strength/weekness.
