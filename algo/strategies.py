@@ -266,7 +266,7 @@ def rebalance_index_positions(apis, server):
         current_bal_df = pd.DataFrame(current_bal, columns = ["symbol","qty","side"])
         
         merged_df = current_bal_df.merge(points_df, left_on = "symbol", right_on = "symbol")
-        merged_df["posdifference"] = merged_df.sumshares - merged_df.qty
+        merged_df["posdifference"] = merged_df.sumshares - merged_df.qty.astype(int)
         
          
     else:

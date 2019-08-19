@@ -9,7 +9,7 @@ import strategies as strategies
 import time
 
 
-def run_echo(server, apis_echo, active_trades_echo, now):
+def run_echo(server, apis_echo, now):
 
     
     #Analyse the etfs 

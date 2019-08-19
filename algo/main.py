@@ -14,7 +14,7 @@ from models import Server, APIs, Trade
 #algos
 import charlie
 import delta
-#import echo
+import echo
 
 #Can edit if needed.
 sleepBetweenCalls = 10

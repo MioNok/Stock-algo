@@ -269,7 +269,7 @@ def echo_active_trades_to_db(apis,serverSite):
     colnames = ["ticker","current_price","lastday_price","qty","unreal_pl"]
     current_port_df = pd.DataFrame(current_port_list, columns= colnames)
     
-    write_data_to_sql(current_port_df, "active_trades_echo", serverSite, if_exists = "replace")
+    db.write_data_to_sql(current_port_df, "active_trades_echo", serverSite, if_exists = "replace")
             
             
 

@@ -201,8 +201,8 @@ def db_main(server, apis, timeframe):
     elif(timeframe =="previous"):
         stockdata_etf = get_iex_data(universe, timeframe = "previous", apikey = apis.iexKey)
         stockdata_etf.drop( "change", axis = 1, inplace = True)
-        stockdata_etf.drop( 0 , axis = 1, inplace = True)
-        write_data_to_sql(stockdata, "etfdata",serverSite = server.serverSite, if_exists = "append" )
+        #stockdata_etf.drop( 0 , axis = 1, inplace = True)
+        write_data_to_sql(stockdata_etf, "etfdata",serverSite = server.serverSite, if_exists = "append" )
 
         
     
