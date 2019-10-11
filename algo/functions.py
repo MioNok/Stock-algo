@@ -56,7 +56,6 @@ def get_watchlist_price_broken(watchlist_df, wl_code, apis, server):
         for element, stock in longs.iterrows():
             if (stock["price_difference"] < 0 ):
                 found_trades_long.append(stock["ticker"])
-                print("Trade , Long", stock["ticker"], stock["side"], stock["price"], stock["current_price"] )
 
         
         shorts = watchlist_df_sliced[watchlist_df_sliced["side"].str.match("sell")]
@@ -107,13 +106,11 @@ def get_watchlist_price(watchlist_df, wl_code, apis, server):
     for index, stock in longs.iterrows():
         if (stock["price_difference"] < 0 ):
             found_trades_long.append(stock["ticker"])
-            print("Trade , Long", stock["ticker"], stock["side"], stock["price"], stock["current_price"] )
             
 
     for index, stock in shorts.iterrows():
         if (stock["price_difference"] > 0):
             found_trades_short.append(stock["ticker"])
-            print("Trade , Short", stock["ticker"], stock["side"], stock["price"], stock["current_price"] )
 
     return found_trades_long, found_trades_short
 
@@ -137,7 +134,7 @@ def fire_orders(trades, side, now, strategy, apis, server, maxPosSize, maxPosVal
                 
             #Check buying power, if not enough brake loop.    
             if(current_bp < current_price + posSize):
-                print("No buying power")
+                logging.info("No buying power")
                 break
             
             live_trade = Trade(trade, posSize, side, now, strategy)
@@ -146,7 +143,7 @@ def fire_orders(trades, side, now, strategy, apis, server, maxPosSize, maxPosVal
             live_trade.submitOrder(apis,server, algo = algo)
             succesful_trades.append(live_trade)
         except:
-            print("Trade failed for ",trade)
+            logging.warning("Trade failed for ",trade)
     return succesful_trades
 
 #Only used for echo. better version of the one above.
@@ -158,7 +155,7 @@ def fire_etf_orders(trades_df, side, now, strategy, apis, server, algo = "echo")
             
             live_trade.submitOrder(apis,server, algo = algo)
         except:
-            print("Trade failed for", trades[1].symbol)
+            logging.warning("Trade failed for", trades[1].symbol)
             
 
 
@@ -185,7 +182,7 @@ def check_stoploss(current_trades,ema_time_period, server,apis, algo = "charlie"
             #Setting the stop price to the 20EMA
             data["stop_price"] = talib.EMA(data.uClose, timeperiod = ema_time_period)
             trade.setStopPrice(data.stop_price[0])
-            print("Stop price for ", trade.ticker," is set to ", trade.stopPrice, "entry:", trade.entryPrice )
+            logging.info("Stop price for ", trade.ticker," is set to ", trade.stopPrice, "entry:", trade.entryPrice )
         else:
             #Get the close price of the last 5 minute candle and comapre it against the stop price
             #If the 5min candle has closed above the stop price, it will flatten the trade.
@@ -215,7 +212,7 @@ def check_target(current_trades,apis, server, algo = "charlie"):
             else:
                 trade.targetPrice = trade.entryPrice - ((trade.stopPrice - trade.entryPrice)*2)
             
-            print("Target price for ", trade.ticker," is set to ", trade.targetPrice,  "entry:", trade.entryPrice, "stop:", trade.stopPrice, "order side", trade.orderSide)
+            #logging.info("Target price for ", trade.ticker," is set to ", trade.targetPrice,  "entry:", trade.entryPrice, "stop:", trade.stopPrice, "order side", trade.orderSide) #Debugging
         else:
             #Close the trade if the 1min candle high has hit the target
             current_trade_price = trade.last15MinCandle.iloc[0,1]
@@ -223,11 +220,11 @@ def check_target(current_trades,apis, server, algo = "charlie"):
             if (current_trade_price_low < trade.targetPrice and trade.orderSide == "sell"):
                 trade.flattenOrder(action = "Target",apis = apis,server = server, algo = algo)
                 current_trades.remove(trade)
-                print("Side sell", "Current trade price (15 min candle high?",current_trade_price, "and low", current_trade_price_low)
+                #logging.info("Side sell", "Current trade price (15 min candle high?",current_trade_price, "and low", current_trade_price_low)
             if (current_trade_price > trade.targetPrice and trade.orderSide == "buy"):
                 trade.flattenOrder(action = "Target", apis = apis, server = server, algo = algo)
                 current_trades.remove(trade)
-                print("Side Buy","Current trade price (15 min candle high?",current_trade_price, "and low", current_trade_price_low)
+                #logging.info("Side Buy","Current trade price (15 min candle high?",current_trade_price, "and low", current_trade_price_low)
     
     return current_trades
 

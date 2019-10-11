@@ -34,15 +34,15 @@ def ma_crossover(ma, time_period, server):
             #Has the stock crossed above?Limiting to stocks over 10 USD
             if (data["EMA"+str(time_period)][0] < data.uClose[0] and data["EMA"+str(time_period)][1] > data.uClose[1]) and data.uHigh[0] > 10:
                 watchlist.append([ticker,"buy", data.uHigh[0],str(time_period)+"EMA"])
-                print("Found crossings for ", ticker)
+                logging.info("Found crossings for ", ticker)
                 
             #Has the stock crossed below? Limiting to stocks over 10 USD
             if (data["EMA"+str(time_period)][0] > data.uClose[0] and data["EMA"+str(time_period)][1] < data.uClose[1]) and data.uHigh[0] > 10:
                 watchlist.append([ticker,"sell",data.uLow[0],str(time_period)+"EMA"])
-                print("Found crossings for ", ticker)
+                logging.info("Found crossings for ", ticker)
                 
         except:
-            print("Database fetch has failed for ticker ", ticker)
+            logging.info("Database fetch has failed for ticker ", ticker)
             
     #Returns an list of lists with ticker, enrty price and strategy          
     return watchlist
@@ -66,11 +66,11 @@ def hammer_doji(server):
             
             if (int(data.dojidf) == 100 | int(data.hammer) == 100 | int(data.doji) == 100):
                 watchlist.append([ticker,"buy",data.uHigh[0],"H/D"])
-                print("Hd found" , ticker)
+                logging.info("Hd found" , ticker)
                 
                 
         except: 
-            print("Database fetch has failed for ticker", ticker)
+            logging.info("Database fetch has failed for ticker", ticker)
     #Returns an list of lists with ticker, enrty price and strategy  
     return watchlist
 
@@ -99,15 +99,15 @@ def bb_cross(server):
             #Has the stock peaked above Upper BB and we are downtrending? -> Short
             if data.BBupper[0] < data.uHigh[0] and data.SMA50[0] < data.SMA50[2]:
                 watchlist.append([ticker,"sell", data.Low[0],"BB"])
-                print("Found BB crossings for ", ticker)
+                logging.info("Found BB crossings for ", ticker)
                 
             #Has the stock peaked below lower BB and we are uptrending? -> Buy
             if data.BBlower[0] > data.uLow[0] and data.SMA50[0] > data.SMA50[2]:
                 watchlist.append([ticker,"buy", data.uHigh[0],"BB"])
-                print("Found BB crossings for ", ticker)
+                logging.info("Found BB crossings for ", ticker)
                 
         except:
-            print("Database fetch has failed for ticker ", ticker)
+            logging.info("Database fetch has failed for ticker ", ticker)
             
     #Returns an list of lists with ticker, enrty price and strategy          
     return watchlist
@@ -145,12 +145,12 @@ def week_cross(server, apis_delta, active_trades_delta):
         #Looking for stocks above 52week high
         if ticker[1].highdiff < 0:
             watchlist.append([ticker[1].ticker,"buy", ticker[1].price,"Week"])
-            print("Found week52 crossings for ", ticker[1].ticker)
+            logging.info("Found week52 crossings for ", ticker[1].ticker)
             
         #Looking for stocks below 52week low    
         if ticker[1].lowdiff > 0:
             watchlist.append([ticker[1].ticker,"sell", ticker[1].price,"Week"])
-            print("Found week52 crossings for ", ticker[1].ticker)
+            logging.info("Found week52 crossings for ", ticker[1].ticker)
     
     #We dont want to add to an existing trade, thus we remove it from watch if we have already initiated a trade on it.
     
@@ -162,7 +162,7 @@ def week_cross(server, apis_delta, active_trades_delta):
         for ticker in wl_tickers:
             if ticker in trade_tickers:
                 wl_tickers.remove(ticker)
-                print("Removed", ticker,"from week watchlist")
+                logging.info("Removed", ticker,"from week watchlist")
         
         
 

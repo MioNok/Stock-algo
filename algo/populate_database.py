@@ -7,7 +7,7 @@ import sqlalchemy
 
 def getSnP500data():
     snp500data = pd.read_csv("https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv")
-    print("S&P500 data fetched")
+    logging.info("S&P500 data fetched")
     return snp500data
 
 #This function is purely for backup purposes here
@@ -26,7 +26,7 @@ def read_data_alpaca(tickers,api, time_period = "day"):
     price_df = current_trade_prices.df    
 
     
-    print("Found data for", int(price_df.shape[1]/5),"stocks.")
+    logging.info("Found data for", int(price_df.shape[1]/5),"stocks.")
     
     #Writing the whole dataframe to the sql server returs a "too many columns error". 
     #Hence we will split up the dataframe so that all close/open values are under one column etc.
@@ -38,7 +38,7 @@ def read_data_alpaca(tickers,api, time_period = "day"):
             
             #Save ticker before changing colnames. have to change colnames in order to append them all together.
             ticker = list(temp_df)[0][0]
-            print("Parsed",ticker)
+            logging.info("Parsed",ticker)
             temp_df.columns = ["open","high","low","close","volume"]
             
             #Get the ticker and the timestamp of the data
@@ -50,7 +50,7 @@ def read_data_alpaca(tickers,api, time_period = "day"):
             
             if ticker == tickers.iloc[-1]: 
                 break
-        except: print("Parsing failed")
+        except: logging.info("Parsing failed")
         
     return stockdata
 
@@ -82,7 +82,7 @@ def get_iex_data(tickers, timeframe, apikey):
             stock_data = pd.read_json("https://cloud.iexapis.com/beta/stock/market/batch?symbols="+str_tickers+"&types=previous&token="+apikey)
         
         else:
-            print("Unrecognized timeframe")
+            logging.error("Unrecognized timeframe")
         
         #Transpose df for the loop
         stock_data = stock_data.transpose()

@@ -85,14 +85,17 @@ class Trade:
             print("Failed to flatten order, ticker: "+self.ticker)
         
 
-    
+
     def setPosition(self, apis):
-        pos = apis.alpacaApi.get_position(self.ticker)
-        self.costBasis = pos.cost_basis
-        self.unrealPL = pos.unrealized_pl
-        self.unrealPLprocent = pos.unrealized_plpc
-        self.entryPrice = float(pos.avg_entry_price)
-        self.currentPrice = float(pos.current_price)
+        try:
+            pos = apis.alpacaApi.get_position(self.ticker)
+            self.costBasis = pos.cost_basis
+            self.unrealPL = pos.unrealized_pl
+            self.unrealPLprocent = pos.unrealized_plpc
+            self.entryPrice = float(pos.avg_entry_price)
+            self.currentPrice = float(pos.current_price)
+        except:
+            print("No position found for ", self.ticker)
         
         #Keeping the history of all trades.
     def updateTradeDb(self, action, initiated, apis, server, algo = "charlie"):
